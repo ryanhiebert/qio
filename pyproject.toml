@@ -1,0 +1,14 @@
+[project]
+name = "qio"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "cuid2>=2.0.1",
+]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.394",
+]
