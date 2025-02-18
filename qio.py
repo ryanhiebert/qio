@@ -21,7 +21,7 @@ class Routine:
 
     def __call__(self, *args, **kwargs) -> Invocation:
         alphabet = string.ascii_lowercase + string.digits
-        id = ''.join(secrets.choice(alphabet) for _ in range(10))
+        id = "".join(secrets.choice(alphabet) for _ in range(10))
         return Invocation(id=id, routine=self, args=args, kwargs=kwargs)
 
     def __repr__(self):
@@ -51,7 +51,9 @@ class Invocation:
         yield self
 
     def __repr__(self):
-        params_repr = ', '.join((*map(repr, self.args), *(f'{k}={v!r}' for k, v in self.kwargs.items())))
+        params_repr = ", ".join(
+            (*map(repr, self.args), *(f"{k}={v!r}" for k, v in self.kwargs.items()))
+        )
         return f"<{type(self).__name__} {self.id!r} {self.routine.name}({params_repr})>"
 
 
@@ -84,43 +86,61 @@ async def coordinate():
 class Waiting:
     def __init__(self):
         self.__waiting: dict[Continuation, set[Invocation]] = {}
+        self.__waiting_on: dict[Invocation, set[Continuation]] = {}
+        self.__queue = SimpleQueue[Continuation]()
+
+    def empty(self):
+        return self.__queue.empty()
+
+    def get(self):
+        return self.__queue.get()
 
     def wait(self, continuation: Continuation, invocations: set[Invocation]):
         self.__waiting[continuation] = invocations
+        for invocation in invocations:
+            self.__waiting_on.setdefault(invocation, set())
+            self.__waiting_on[invocation].add(continuation)
 
-    def complete(self, invocation: Invocation, value) -> set[Continuation]:
-        continuations = set()
-        for continuation, invocations in list(self.__waiting.items()):
-            if invocation in invocations:
-                invocations.remove(invocation)
-                if not invocations:
-                    del self.__waiting[continuation]
-                    continuations.add(
-                        Continuation(
-                            invocation=continuation.invocation,
-                            generator=continuation.generator,
-                            value=value,
-                        )
+    def start(self, invocation: Invocation, awaitable: Awaitable):
+        self.__queue.put(
+            Continuation(
+                invocation=invocation,
+                generator=awaitable.__await__(),
+                value=None,
+            )
+        )
+
+    def complete(self, invocation: Invocation, value):
+        for continuation in self.__waiting_on.pop(invocation, set()):
+            self.__waiting[continuation].remove(invocation)
+            if not self.__waiting[continuation]:
+                del self.__waiting[continuation]
+                self.__queue.put(
+                    Continuation(
+                        invocation=continuation.invocation,
+                        generator=continuation.generator,
+                        value=value,
                     )
-        return continuations
+                )
 
 
-def execute(queue: SimpleQueue[Invocation | Continuation], *, threads: int = 3):
+def execute(queue: SimpleQueue[Invocation], *, threads: int = 3):
     results: dict[Invocation, Any] = {}
     running: dict[Future, Invocation | Continuation] = {}
     waiting = Waiting()
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
         try:
-            while not queue.empty() or running:
-                while not queue.empty() and len(running) < threads:
+            while not queue.empty() or not waiting.empty() or running:
+                while len(running) < threads and not waiting.empty():
+                    task = waiting.get()
+                    future = executor.submit(task.send)
+                    running[future] = task
+
+                while len(running) < threads and not queue.empty():
                     task = queue.get()
-                    if isinstance(task, Continuation):
-                        future = executor.submit(task.send)
-                        running[future] = task
-                    else:
-                        future = executor.submit(task.run)
-                        running[future] = task
+                    future = executor.submit(task.run)
+                    running[future] = task
 
                 done, _ = wait(running, return_when=FIRST_COMPLETED)
                 for future in done:
@@ -132,23 +152,14 @@ def execute(queue: SimpleQueue[Invocation | Continuation], *, threads: int = 3):
                             queue.put(wait_for)
                         except StopIteration as stop:
                             results[task.invocation] = stop.value
-                            for continuation in waiting.complete(
-                                task.invocation, stop.value
-                            ):
-                                queue.put(continuation)
+                            waiting.complete(task.invocation, stop.value)
                     else:
                         result = future.result()
                         if isinstance(result, Awaitable):
-                            continuation = Continuation(
-                                invocation=task,
-                                generator=result.__await__(),
-                                value=None,
-                            )
-                            queue.put(continuation)
+                            waiting.start(task, result)
                         else:
                             results[task] = result
-                            for continuation in waiting.complete(task, result):
-                                queue.put(continuation)
+                            waiting.complete(task, result)
         except KeyboardInterrupt:
             print("Shutting down gracefully.")
             executor.shutdown(wait=False, cancel_futures=True)
@@ -163,7 +174,7 @@ INVOCATIONS = [
 
 
 if __name__ == "__main__":
-    queue = SimpleQueue()
+    queue = SimpleQueue[Invocation]()
     for invocation in INVOCATIONS:
         queue.put(invocation)
     execute(queue)
