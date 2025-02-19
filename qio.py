@@ -1,25 +1,28 @@
 from __future__ import annotations
-from typing import Any
-from typing import Awaitable
-from typing import Generator
-from dataclasses import dataclass
+
+import secrets
+import string
+from collections.abc import Awaitable
+from collections.abc import Callable
+from collections.abc import Generator
+from concurrent.futures import FIRST_COMPLETED
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import wait
-from concurrent.futures import FIRST_COMPLETED
-from time import sleep
-from queue import SimpleQueue
+from dataclasses import dataclass
 from pprint import pprint
-import string
-import secrets
+from queue import SimpleQueue
+from time import sleep
+from typing import Any
+from typing import cast
 
 
 class Routine:
-    def __init__(self, fn, *, name: str):
-        self._fn = fn
+    def __init__(self, fn: Callable[..., Any], *, name: str):
+        self.fn = fn
         self.name = name
 
-    def __call__(self, *args, **kwargs) -> Invocation:
+    def __call__(self, *args: Any, **kwargs: Any) -> Invocation:
         alphabet = string.ascii_lowercase + string.digits
         id = "".join(secrets.choice(alphabet) for _ in range(10))
         return Invocation(id=id, routine=self, args=args, kwargs=kwargs)
@@ -31,7 +34,7 @@ class Routine:
 def routine(*, name: str | None = None):
     """Decorate a function to make it a routine."""
 
-    def create_routine(fn):
+    def create_routine(fn: Callable[..., Any]) -> Routine:
         return Routine(fn, name=name or f"{fn.__module__}.{fn.__qualname__}")
 
     return create_routine
@@ -45,14 +48,14 @@ class Invocation:
     kwargs: dict[str, Any]
 
     def run(self) -> Any:
-        return self.routine._fn(*self.args, **self.kwargs)
+        return self.routine.fn(*self.args, **self.kwargs)
 
     def __await__(self):
         yield self
 
     def __repr__(self):
         params_repr = ", ".join(
-            (*map(repr, self.args), *(f"{k}={v!r}" for k, v in self.kwargs.items()))
+            (*map(repr, self.args), *(f"{k}={v!r}" for k, v in self.kwargs.items())),
         )
         return f"<{type(self).__name__} {self.id!r} {self.routine.name}({params_repr})>"
 
@@ -101,16 +104,16 @@ class Waiting:
             self.__waiting_on.setdefault(invocation, set())
             self.__waiting_on[invocation].add(continuation)
 
-    def start(self, invocation: Invocation, awaitable: Awaitable):
+    def start(self, invocation: Invocation, awaitable: Awaitable[Any]):
         self.__queue.put(
             Continuation(
                 invocation=invocation,
                 generator=awaitable.__await__(),
                 value=None,
-            )
+            ),
         )
 
-    def complete(self, invocation: Invocation, value):
+    def complete(self, invocation: Invocation, value: Any):
         for continuation in self.__waiting_on.pop(invocation, set()):
             self.__waiting[continuation].remove(invocation)
             if not self.__waiting[continuation]:
@@ -120,13 +123,13 @@ class Waiting:
                         invocation=continuation.invocation,
                         generator=continuation.generator,
                         value=value,
-                    )
+                    ),
                 )
 
 
 def execute(queue: SimpleQueue[Invocation], *, threads: int = 3):
     results: dict[Invocation, Any] = {}
-    running: dict[Future, Invocation | Continuation] = {}
+    running: dict[Future[Any], Invocation | Continuation] = {}
     waiting = Waiting()
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
@@ -156,7 +159,7 @@ def execute(queue: SimpleQueue[Invocation], *, threads: int = 3):
                     else:
                         result = future.result()
                         if isinstance(result, Awaitable):
-                            waiting.start(task, result)
+                            waiting.start(task, cast(Any, result))
                         else:
                             results[task] = result
                             waiting.complete(task, result)

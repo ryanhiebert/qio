@@ -1,14 +1,19 @@
 [project]
 name = "qio"
 version = "0.1.0"
-description = "Add your description here"
+description = "Python background queue processing with an async twist"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = [
-    "cuid2>=2.0.1",
-]
+dependencies = []
 
 [dependency-groups]
 dev = [
     "pyright>=1.1.394",
+    "ruff>=0.9.6",
 ]
+
+[tool.ruff.lint]
+select = ["E", "F", "UP", "B", "SIM", "I"]
+
+[tool.ruff.lint.isort]
+force-single-line = true
