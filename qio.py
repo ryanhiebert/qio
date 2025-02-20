@@ -10,11 +10,18 @@ from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import wait
 from dataclasses import dataclass
+from dataclasses import field
 from pprint import pprint
 from queue import SimpleQueue
 from time import sleep
 from typing import Any
 from typing import cast
+
+B36_ALPHABET = string.ascii_lowercase + string.digits
+
+
+def b36random(length: int = 10) -> str:
+    return "".join(secrets.choice(B36_ALPHABET) for _ in range(length))
 
 
 class Routine:
@@ -23,9 +30,7 @@ class Routine:
         self.name = name
 
     def __call__(self, *args: Any, **kwargs: Any) -> Invocation:
-        alphabet = string.ascii_lowercase + string.digits
-        id = "".join(secrets.choice(alphabet) for _ in range(10))
-        return Invocation(id=id, routine=self, args=args, kwargs=kwargs)
+        return Invocation(routine=self, args=args, kwargs=kwargs)
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.name!r}>"
@@ -40,9 +45,9 @@ def routine(*, name: str | None = None):
     return create_routine
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, kw_only=True)
 class Invocation:
-    id: str
+    id: str = field(default_factory=b36random)
     routine: Routine
     args: tuple[Any]
     kwargs: dict[str, Any]
@@ -60,8 +65,9 @@ class Invocation:
         return f"<{type(self).__name__} {self.id!r} {self.routine.name}({params_repr})>"
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, kw_only=True)
 class Continuation:
+    id: str = field(default_factory=b36random)
     invocation: Invocation
     generator: Generator[Invocation, Any, Any]
     value: Any
