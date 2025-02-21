@@ -4,8 +4,8 @@ from collections.abc import Callable
 from typing import Any
 
 
-class Routine:
-    def __init__(self, fn: Callable[..., Any], *, name: str):
+class Routine[T : Callable[..., Any] = Callable[..., Any]]:
+    def __init__(self, fn: T, *, name: str):
         self.fn = fn
         self.name = name
 

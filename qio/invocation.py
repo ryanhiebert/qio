@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from dataclasses import field
 from typing import Any
@@ -9,9 +10,9 @@ from .routine import Routine
 
 
 @dataclass(eq=False, kw_only=True)
-class Invocation:
+class Invocation[T: Callable[..., Any] = Callable[..., Any]]:
     id: str = field(default_factory=random_id)
-    routine: Routine
+    routine: Routine[T]
     args: tuple[Any]
     kwargs: dict[str, Any]
 

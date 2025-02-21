@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from collections.abc import Generator
 from dataclasses import dataclass
 from dataclasses import field
@@ -10,10 +11,10 @@ from .invocation import Invocation
 
 
 @dataclass(eq=False, kw_only=True)
-class Continuation:
+class Continuation[T: Callable[..., Any] = Callable[..., Any]]:
     id: str = field(default_factory=random_id)
-    invocation: Invocation
-    generator: Generator[Invocation, Any, Any]
+    invocation: Invocation[T]
+    generator: Generator[Invocation[T], Any, Any]
     value: Any
 
     def send(self) -> Any:
