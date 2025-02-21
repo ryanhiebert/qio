@@ -1,79 +1,19 @@
 from __future__ import annotations
 
-import secrets
-import string
 from collections.abc import Awaitable
-from collections.abc import Callable
-from collections.abc import Generator
 from concurrent.futures import FIRST_COMPLETED
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import wait
-from dataclasses import dataclass
-from dataclasses import field
 from pprint import pprint
 from queue import SimpleQueue
 from time import sleep
 from typing import Any
 from typing import cast
 
-B36_ALPHABET = string.ascii_lowercase + string.digits
-
-
-def b36random(length: int = 10) -> str:
-    return "".join(secrets.choice(B36_ALPHABET) for _ in range(length))
-
-
-class Routine:
-    def __init__(self, fn: Callable[..., Any], *, name: str):
-        self.fn = fn
-        self.name = name
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Invocation:
-        return Invocation(routine=self, args=args, kwargs=kwargs)
-
-    def __repr__(self):
-        return f"<{type(self).__name__} {self.name!r}>"
-
-
-def routine(*, name: str | None = None):
-    """Decorate a function to make it a routine."""
-
-    def create_routine(fn: Callable[..., Any]) -> Routine:
-        return Routine(fn, name=name or f"{fn.__module__}.{fn.__qualname__}")
-
-    return create_routine
-
-
-@dataclass(eq=False, kw_only=True)
-class Invocation:
-    id: str = field(default_factory=b36random)
-    routine: Routine
-    args: tuple[Any]
-    kwargs: dict[str, Any]
-
-    def run(self) -> Any:
-        return self.routine.fn(*self.args, **self.kwargs)
-
-    def __await__(self):
-        yield self
-
-    def __repr__(self):
-        params_repr = ", ".join(
-            (*map(repr, self.args), *(f"{k}={v!r}" for k, v in self.kwargs.items())),
-        )
-        return f"<{type(self).__name__} {self.id!r} {self.routine.name}({params_repr})>"
-
-
-@dataclass(eq=False, kw_only=True)
-class Continuation:
-    id: str = field(default_factory=b36random)
-    invocation: Invocation
-    generator: Generator[Invocation, Any, Any]
-    value: Any
-
-    def send(self) -> Any:
-        return self.generator.send(self.value)
+from . import routine
+from .continuation import Continuation
+from .invocation import Invocation
 
 
 @routine()
