@@ -73,65 +73,52 @@ class Waiting:
                 )
 
 
-class Qio:
-    def __init__(self):
-        self.__queue = SimpleQueue[Invocation]()
+def main(threads: int = 3):
+    queue = SimpleQueue[Invocation]()
+    results: dict[Invocation, Any] = {}
+    running: dict[Future[Any], Invocation | Continuation] = {}
+    waiting = Waiting()
     
-    def enqueue(self, invocation: Invocation):
-        self.__queue.put(invocation)
+    queue.put(example(1,2))
+    queue.put(coordinate())
+    queue.put(coordinate())
 
-    def execute(self, *, threads: int = 3):
-        queue = self.__queue
-        results: dict[Invocation, Any] = {}
-        running: dict[Future[Any], Invocation | Continuation] = {}
-        waiting = Waiting()
-    
-        with ThreadPoolExecutor(max_workers=threads) as executor:
-            try:
-                while not queue.empty() or not waiting.empty() or running:
-                    while len(running) < threads and not waiting.empty():
-                        task = waiting.get()
-                        future = executor.submit(task.send)
-                        running[future] = task
-    
-                    while len(running) < threads and not queue.empty():
-                        task = queue.get()
-                        future = executor.submit(task.run)
-                        running[future] = task
-    
-                    done, _ = wait(running, return_when=FIRST_COMPLETED)
-                    for future in done:
-                        task = running.pop(future)
-                        if isinstance(task, Continuation):
-                            try:
-                                wait_for = future.result()
-                                waiting.wait(task, {wait_for})
-                                queue.put(wait_for)
-                            except StopIteration as stop:
-                                results[task.invocation] = stop.value
-                                waiting.complete(task.invocation, stop.value)
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        try:
+            while not queue.empty() or not waiting.empty() or running:
+                while len(running) < threads and not waiting.empty():
+                    task = waiting.get()
+                    future = executor.submit(task.send)
+                    running[future] = task
+
+                while len(running) < threads and not queue.empty():
+                    task = queue.get()
+                    future = executor.submit(task.run)
+                    running[future] = task
+
+                done, _ = wait(running, return_when=FIRST_COMPLETED)
+                for future in done:
+                    task = running.pop(future)
+                    if isinstance(task, Continuation):
+                        try:
+                            wait_for = future.result()
+                            waiting.wait(task, {wait_for})
+                            queue.put(wait_for)
+                        except StopIteration as stop:
+                            results[task.invocation] = stop.value
+                            waiting.complete(task.invocation, stop.value)
+                    else:
+                        result = future.result()
+                        if isinstance(result, Awaitable):
+                            waiting.start(task, cast(Any, result))
                         else:
-                            result = future.result()
-                            if isinstance(result, Awaitable):
-                                waiting.start(task, cast(Any, result))
-                            else:
-                                results[task] = result
-                                waiting.complete(task, result)
-            except KeyboardInterrupt:
-                print("Shutting down gracefully.")
-                executor.shutdown(wait=False, cancel_futures=True)
-        pprint(results)
-
-
-INVOCATIONS = [
-    example(1, 2),
-    coordinate(),
-    coordinate(),
-]
+                            results[task] = result
+                            waiting.complete(task, result)
+        except KeyboardInterrupt:
+            print("Shutting down gracefully.")
+            executor.shutdown(wait=False, cancel_futures=True)
+    pprint(results)
 
 
 if __name__ == "__main__":
-    qio  = Qio()
-    for invocation in INVOCATIONS:
-        qio.enqueue(invocation)
-    qio.execute()
+    main()
