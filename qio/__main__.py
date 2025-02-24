@@ -69,10 +69,10 @@ class Waiting:
         self.__waiting: dict[SendContinuation, set[Invocation]] = {}
         self.__waiting_on: dict[Invocation, set[SendContinuation]] = {}
         self.__queue = SimpleQueue[SendContinuation | ThrowContinuation]()
-        self.__continued = self.__bus.subscribe({InvocationContinued})
-        self.__threw = self.__bus.subscribe({InvocationThrew})
-        self.__completed = self.__bus.subscribe({InvocationCompleted})
-        self.__suspended = self.__bus.subscribe({InvocationSuspended})
+        self.__continued = self.__bus.subscribe(InvocationContinued)
+        self.__threw = self.__bus.subscribe(InvocationThrew)
+        self.__completed = self.__bus.subscribe(InvocationCompleted)
+        self.__suspended = self.__bus.subscribe(InvocationSuspended)
 
     def empty(self):
         return (
@@ -181,29 +181,28 @@ class Waiting:
 
 class Bus:
     def __init__(self):
-        self.__subscribers: dict[SimpleQueue[Any], frozenset[type]] = {}
         self.__subscriptions: dict[type, set[SimpleQueue[Any]]] = {}
-
-    def subscribe[T](self, types: Iterable[type[T]]) -> SimpleQueue[T]:
+    
+    def subscribe[T](self, type: type[T]) -> SimpleQueue[T]:
         queue = SimpleQueue[T]()
-        self.__subscribers[queue] = frozenset(types)
-        for type in types:
-            self.__subscriptions.setdefault(type, set()).add(queue)
+        self.__subscriptions.setdefault(type, set()).add(queue)
         return queue
 
     def publish(self, event: Any):
         print(event)
-        subscribers = set[SimpleQueue[Any]]()
-        for cls in type(event).__mro__:
-            subscribers |= self.__subscriptions.get(cls, set[SimpleQueue[Any]]())
-
+        subscribers = {
+            subscription
+            for type, subscriptions in self.__subscriptions.items()
+            for subscription in subscriptions
+            if isinstance(event, type)
+        }
         for subscriber in subscribers:
             subscriber.put(event)
 
 
 def main(threads: int = 3):
     bus = Bus()
-    enqueued = bus.subscribe({InvocationEnqueued})
+    enqueued = bus.subscribe(InvocationEnqueued)
 
     queue = SimpleQueue[Invocation]()
     running: dict[Future[Any], Invocation | SendContinuation | ThrowContinuation] = {}
