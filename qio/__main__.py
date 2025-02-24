@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable
-from collections.abc import Iterable
 from concurrent.futures import FIRST_COMPLETED
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
@@ -13,6 +12,7 @@ from typing import Any
 from typing import cast
 
 from . import routine
+from .bus import Bus
 from .continuation import SendContinuation
 from .continuation import ThrowContinuation
 from .invocation import Invocation
@@ -176,28 +176,6 @@ class Waiting:
                         exception=exception,
                     )
                 )
-        pass
-
-
-class Bus:
-    def __init__(self):
-        self.__subscriptions: dict[type, set[SimpleQueue[Any]]] = {}
-    
-    def subscribe[T](self, type: type[T]) -> SimpleQueue[T]:
-        queue = SimpleQueue[T]()
-        self.__subscriptions.setdefault(type, set()).add(queue)
-        return queue
-
-    def publish(self, event: Any):
-        print(event)
-        subscribers = {
-            subscription
-            for type, subscriptions in self.__subscriptions.items()
-            for subscription in subscriptions
-            if isinstance(event, type)
-        }
-        for subscriber in subscribers:
-            subscriber.put(event)
 
 
 def main(threads: int = 3):
