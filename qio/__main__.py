@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable
+from collections.abc import Iterable
 from concurrent.futures import FIRST_COMPLETED
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import wait
-from pprint import pprint
 from queue import SimpleQueue
 from time import sleep
 from typing import Any
@@ -14,49 +14,113 @@ from typing import cast
 from . import routine
 from .continuation import Continuation
 from .invocation import Invocation
+from .invocation import InvocationCompleted
+from .invocation import InvocationContinued
+from .invocation import InvocationEnqueued
+from .invocation import InvocationErrored
+from .invocation import InvocationResumed
+from .invocation import InvocationStarted
+from .invocation import InvocationSucceeded
+from .invocation import InvocationSuspended
 
 
 @routine()
-def example(instance: int, iterations: int):
+def regular(instance: int, iterations: int):
     for i in range(iterations):
         print(f"Iteration {instance} {i} started")
         sleep(1)
-    return f"sleep_and_print {instance}"
+    print(f"Instance {instance} completed")
+    return f"Instance {instance} completed"
 
 
 @routine()
-async def coordinate():
-    print("Coordinator started")
-    value = await example(0, 2)
-    print(f"coordinate {value=}")
-    return "coordinate"
+async def aregular(instance: int, iterations: int):
+    return await regular(instance, iterations)
+
+
+async def abstract(instance: int, iterations: int):
+    # Works as long as the async call stack goes up to an
+    # async def routine.
+    return await aregular(instance, iterations)
+
+
+@routine()
+async def irregular():
+    await regular(1, 2)
+    print("irregular sleep started")
+    sleep(1)
+    print("irregular sleep ended")
+    return await abstract(2, 2)
 
 
 class Waiting:
-    def __init__(self):
+    def __init__(self, bus: Bus):
+        self.__bus = bus
         self.__waiting: dict[Continuation, set[Invocation]] = {}
         self.__waiting_on: dict[Invocation, set[Continuation]] = {}
         self.__queue = SimpleQueue[Continuation]()
+        self.__continued = self.__bus.subscribe({InvocationContinued})
+        self.__completed = self.__bus.subscribe({InvocationCompleted})
+        self.__suspended = self.__bus.subscribe({InvocationSuspended})
 
     def empty(self):
-        return self.__queue.empty()
+        return (
+            self.__queue.empty()
+            and self.__continued.empty()
+            and self.__completed.empty()
+            and self.__suspended.empty()
+        )
+
+    def process(self):
+        """Process the necessary events from the bus."""
+        while not self.__completed.empty():
+            event = self.__completed.get()
+            match event:
+                case InvocationSucceeded(invocation=invocation, value=value):
+                    self.complete(invocation, value)
+                case _:
+                    raise NotImplementedError("Not ready for this")
+
+        while not self.__continued.empty():
+            event = self.__continued.get()
+            self.__queue.put(
+                Continuation(
+                    invocation=event.invocation,
+                    generator=event.generator,
+                    value=event.value,
+                )
+            )
+
+        while not self.__suspended.empty():
+            event = self.__suspended.get()
+            continuation = Continuation(
+                invocation=event.invocation,
+                generator=event.generator,
+                value=None,
+            )
+            self.__waiting[continuation] = {event.suspension}
+            self.__waiting_on.setdefault(event.suspension, set()).add(continuation)
 
     def get(self):
         return self.__queue.get()
 
-    def wait(self, continuation: Continuation, invocations: set[Invocation]):
-        self.__waiting[continuation] = invocations
-        for invocation in invocations:
-            self.__waiting_on.setdefault(invocation, set())
-            self.__waiting_on[invocation].add(continuation)
+    def wait(self, continuation: Continuation, suspension: Invocation):
+        self.__bus.publish(
+            InvocationSuspended(
+                invocation=continuation.invocation,
+                generator=continuation.generator,
+                suspension=suspension,
+            )
+        )
+        self.__bus.publish(InvocationEnqueued(invocation=suspension))
 
     def start(self, invocation: Invocation, awaitable: Awaitable[Any]):
-        self.__queue.put(
-            Continuation(
+        self.__bus.publish(
+            InvocationContinued(
                 invocation=invocation,
                 generator=awaitable.__await__(),
                 value=None,
-            ),
+            )
         )
 
     def complete(self, invocation: Invocation, value: Any):
@@ -64,35 +128,72 @@ class Waiting:
             self.__waiting[continuation].remove(invocation)
             if not self.__waiting[continuation]:
                 del self.__waiting[continuation]
-                self.__queue.put(
-                    Continuation(
+                self.__bus.publish(
+                    InvocationContinued(
                         invocation=continuation.invocation,
                         generator=continuation.generator,
                         value=value,
-                    ),
+                    )
                 )
 
 
+class Bus:
+    def __init__(self):
+        self.__subscribers: dict[SimpleQueue[Any], frozenset[type]] = {}
+        self.__subscriptions: dict[type, set[SimpleQueue[Any]]] = {}
+
+    def subscribe[T](self, types: Iterable[type[T]]) -> SimpleQueue[T]:
+        queue = SimpleQueue[T]()
+        self.__subscribers[queue] = frozenset(types)
+        for type in types:
+            self.__subscriptions.setdefault(type, set()).add(queue)
+        return queue
+
+    def publish(self, event: Any):
+        print(event)
+        subscribers = set[SimpleQueue[Any]]()
+        for cls in type(event).__mro__:
+            subscribers |= self.__subscriptions.get(cls, set[SimpleQueue[Any]]())
+
+        for subscriber in subscribers:
+            subscriber.put(event)
+
+
 def main(threads: int = 3):
+    bus = Bus()
+    enqueued = bus.subscribe({InvocationEnqueued})
+
     queue = SimpleQueue[Invocation]()
-    results: dict[Invocation, Any] = {}
     running: dict[Future[Any], Invocation | Continuation] = {}
-    waiting = Waiting()
-    
-    queue.put(example(1,2))
-    queue.put(coordinate())
-    queue.put(coordinate())
+    waiting = Waiting(bus)
+
+    bus.publish(InvocationEnqueued(invocation=regular(0, 2)))
+    bus.publish(InvocationEnqueued(invocation=irregular()))
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
         try:
-            while not queue.empty() or not waiting.empty() or running:
+            while (
+                not enqueued.empty()
+                or not queue.empty()
+                or not waiting.empty()
+                or running
+            ):
+                while not enqueued.empty():
+                    queue.put(enqueued.get().invocation)
+
+                waiting.process()
+
                 while len(running) < threads and not waiting.empty():
                     task = waiting.get()
+                    bus.publish(
+                        InvocationResumed(invocation=task.invocation, value=task.value)
+                    )
                     future = executor.submit(task.send)
                     running[future] = task
 
                 while len(running) < threads and not queue.empty():
                     task = queue.get()
+                    bus.publish(InvocationStarted(invocation=task))
                     future = executor.submit(task.run)
                     running[future] = task
 
@@ -102,22 +203,41 @@ def main(threads: int = 3):
                     if isinstance(task, Continuation):
                         try:
                             wait_for = future.result()
-                            waiting.wait(task, {wait_for})
-                            queue.put(wait_for)
+                            waiting.wait(task, wait_for)
                         except StopIteration as stop:
-                            results[task.invocation] = stop.value
-                            waiting.complete(task.invocation, stop.value)
+                            bus.publish(
+                                InvocationSucceeded(
+                                    invocation=task.invocation,
+                                    value=stop.value,
+                                )
+                            )
+                        except Exception as exception:
+                            bus.publish(
+                                InvocationErrored(
+                                    invocation=task.invocation,
+                                    exception=exception,
+                                )
+                            )
                     else:
-                        result = future.result()
-                        if isinstance(result, Awaitable):
-                            waiting.start(task, cast(Any, result))
+                        try:
+                            result = future.result()
+                        except Exception as exception:
+                            bus.publish(
+                                InvocationErrored(
+                                    invocation=task,
+                                    exception=exception,
+                                )
+                            )
                         else:
-                            results[task] = result
-                            waiting.complete(task, result)
+                            if isinstance(result, Awaitable):
+                                waiting.start(task, cast(Awaitable[Any], result))
+                            else:
+                                bus.publish(
+                                    InvocationSucceeded(invocation=task, value=result)
+                                )
         except KeyboardInterrupt:
             print("Shutting down gracefully.")
             executor.shutdown(wait=False, cancel_futures=True)
-    pprint(results)
 
 
 if __name__ == "__main__":

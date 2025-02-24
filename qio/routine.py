@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import Any
 
 
-class Routine[T : Callable[..., Any] = Callable[..., Any]]:
+class Routine[T: Callable[..., Any] = Callable[..., Any]]:
     def __init__(self, fn: T, *, name: str):
         self.fn = fn
         self.name = name
