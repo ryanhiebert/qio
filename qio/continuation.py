@@ -15,7 +15,19 @@ class Continuation[T: Callable[..., Any] = Callable[..., Any]]:
     id: str = field(default_factory=random_id)
     invocation: Invocation[T]
     generator: Generator[Invocation[T], Any, Any]
+
+
+@dataclass(eq=False, kw_only=True)
+class SendContinuation(Continuation):
     value: Any
 
     def send(self) -> Any:
         return self.generator.send(self.value)
+
+
+@dataclass(eq=False, kw_only=True)
+class ThrowContinuation(Continuation):
+    exception: Exception
+
+    def throw(self) -> Any:
+        return self.generator.throw(self.exception)

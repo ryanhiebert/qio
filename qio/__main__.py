@@ -6,13 +6,15 @@ from concurrent.futures import FIRST_COMPLETED
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import wait
+from contextlib import suppress
 from queue import SimpleQueue
 from time import sleep
 from typing import Any
 from typing import cast
 
 from . import routine
-from .continuation import Continuation
+from .continuation import SendContinuation
+from .continuation import ThrowContinuation
 from .invocation import Invocation
 from .invocation import InvocationCompleted
 from .invocation import InvocationContinued
@@ -22,6 +24,7 @@ from .invocation import InvocationResumed
 from .invocation import InvocationStarted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspended
+from .invocation import InvocationThrew
 
 
 @routine()
@@ -34,6 +37,11 @@ def regular(instance: int, iterations: int):
 
 
 @routine()
+def raises():
+    raise ValueError("This is a test exception")
+
+
+@routine()
 async def aregular(instance: int, iterations: int):
     return await regular(instance, iterations)
 
@@ -41,6 +49,8 @@ async def aregular(instance: int, iterations: int):
 async def abstract(instance: int, iterations: int):
     # Works as long as the async call stack goes up to an
     # async def routine.
+    with suppress(ValueError):
+        await raises()
     return await aregular(instance, iterations)
 
 
@@ -56,10 +66,11 @@ async def irregular():
 class Waiting:
     def __init__(self, bus: Bus):
         self.__bus = bus
-        self.__waiting: dict[Continuation, set[Invocation]] = {}
-        self.__waiting_on: dict[Invocation, set[Continuation]] = {}
-        self.__queue = SimpleQueue[Continuation]()
+        self.__waiting: dict[SendContinuation, set[Invocation]] = {}
+        self.__waiting_on: dict[Invocation, set[SendContinuation]] = {}
+        self.__queue = SimpleQueue[SendContinuation | ThrowContinuation]()
         self.__continued = self.__bus.subscribe({InvocationContinued})
+        self.__threw = self.__bus.subscribe({InvocationThrew})
         self.__completed = self.__bus.subscribe({InvocationCompleted})
         self.__suspended = self.__bus.subscribe({InvocationSuspended})
 
@@ -67,6 +78,7 @@ class Waiting:
         return (
             self.__queue.empty()
             and self.__continued.empty()
+            and self.__threw.empty()
             and self.__completed.empty()
             and self.__suspended.empty()
         )
@@ -78,22 +90,34 @@ class Waiting:
             match event:
                 case InvocationSucceeded(invocation=invocation, value=value):
                     self.complete(invocation, value)
+                case InvocationErrored(invocation=invocation, exception=exception):
+                    self.throw(invocation, exception)
                 case _:
-                    raise NotImplementedError("Not ready for this")
+                    raise NotImplementedError("Unexpected!!")
 
         while not self.__continued.empty():
             event = self.__continued.get()
             self.__queue.put(
-                Continuation(
+                SendContinuation(
                     invocation=event.invocation,
                     generator=event.generator,
                     value=event.value,
                 )
             )
 
+        while not self.__threw.empty():
+            event = self.__threw.get()
+            self.__queue.put(
+                ThrowContinuation(
+                    invocation=event.invocation,
+                    generator=event.generator,
+                    exception=event.exception,
+                )
+            )
+
         while not self.__suspended.empty():
             event = self.__suspended.get()
-            continuation = Continuation(
+            continuation = SendContinuation(
                 invocation=event.invocation,
                 generator=event.generator,
                 value=None,
@@ -104,7 +128,11 @@ class Waiting:
     def get(self):
         return self.__queue.get()
 
-    def wait(self, continuation: Continuation, suspension: Invocation):
+    def wait(
+        self,
+        continuation: SendContinuation | ThrowContinuation,
+        suspension: Invocation,
+    ):
         self.__bus.publish(
             InvocationSuspended(
                 invocation=continuation.invocation,
@@ -136,6 +164,20 @@ class Waiting:
                     )
                 )
 
+    def throw(self, invocation: Invocation, exception: Exception):
+        for continuation in self.__waiting_on.pop(invocation, set()):
+            self.__waiting[continuation].remove(invocation)
+            if not self.__waiting[continuation]:
+                del self.__waiting[continuation]
+                self.__bus.publish(
+                    InvocationThrew(
+                        invocation=continuation.invocation,
+                        generator=continuation.generator,
+                        exception=exception,
+                    )
+                )
+        pass
+
 
 class Bus:
     def __init__(self):
@@ -164,7 +206,7 @@ def main(threads: int = 3):
     enqueued = bus.subscribe({InvocationEnqueued})
 
     queue = SimpleQueue[Invocation]()
-    running: dict[Future[Any], Invocation | Continuation] = {}
+    running: dict[Future[Any], Invocation | SendContinuation | ThrowContinuation] = {}
     waiting = Waiting(bus)
 
     bus.publish(InvocationEnqueued(invocation=regular(0, 2)))
@@ -185,10 +227,11 @@ def main(threads: int = 3):
 
                 while len(running) < threads and not waiting.empty():
                     task = waiting.get()
-                    bus.publish(
-                        InvocationResumed(invocation=task.invocation, value=task.value)
-                    )
-                    future = executor.submit(task.send)
+                    bus.publish(InvocationResumed(invocation=task.invocation))
+                    if isinstance(task, SendContinuation):
+                        future = executor.submit(task.send)
+                    else:
+                        future = executor.submit(task.throw)
                     running[future] = task
 
                 while len(running) < threads and not queue.empty():
@@ -200,7 +243,7 @@ def main(threads: int = 3):
                 done, _ = wait(running, return_when=FIRST_COMPLETED)
                 for future in done:
                     task = running.pop(future)
-                    if isinstance(task, Continuation):
+                    if isinstance(task, SendContinuation | ThrowContinuation):
                         try:
                             wait_for = future.result()
                             waiting.wait(task, wait_for)

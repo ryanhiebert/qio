@@ -73,11 +73,18 @@ class InvocationContinued(InvocationEvent):
 
 
 @dataclass(eq=False, kw_only=True)
-class InvocationResumed(InvocationEvent):
-    value: Any
+class InvocationThrew(InvocationEvent):
+    generator: Generator[Invocation, Any, Any]
+    exception: Exception
 
     def __repr__(self):
-        return f"<{type(self).__name__} {self.invocation!r} value={self.value!r}>"
+        return (
+            f"<{type(self).__name__} {self.invocation!r} exception={self.exception!r}>"
+        )
+
+
+@dataclass(eq=False, kw_only=True, repr=False)
+class InvocationResumed(InvocationEvent): ...
 
 
 @dataclass(eq=False, kw_only=True, repr=False)
