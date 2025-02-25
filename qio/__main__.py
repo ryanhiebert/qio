@@ -62,93 +62,23 @@ async def irregular():
     return await abstract(2, 2)
 
 
-class Waiting:
-    def __init__(self, bus: Bus):
-        self.__bus = bus
-        self.__waiting_on: dict[Invocation, SendContinuation] = {}
-        self.__queue = SimpleQueue[SendContinuation | ThrowContinuation]()
-        self.__events = self.__bus.subscribe(
-            {
-                InvocationContinued,
-                InvocationThrew,
-                InvocationErrored,
-                InvocationSucceeded,
-                InvocationSuspended,
-            }
-        )
-
-    def empty(self):
-        return self.__queue.empty() and self.__events.empty()
-
-    def process(self):
-        """Process the necessary events from the bus."""
-        while not self.__events.empty():
-            match self.__events.get():
-                case InvocationSucceeded(invocation=invocation, value=value):
-                    if invocation in self.__waiting_on:
-                        continuation = self.__waiting_on.pop(invocation)
-                        self.__bus.publish(
-                            InvocationContinued(
-                                invocation=continuation.invocation,
-                                generator=continuation.generator,
-                                value=value,
-                            )
-                        )
-                case InvocationErrored(invocation=invocation, exception=exception):
-                    if invocation in self.__waiting_on:
-                        continuation = self.__waiting_on.pop(invocation)
-                        self.__bus.publish(
-                            InvocationThrew(
-                                invocation=continuation.invocation,
-                                generator=continuation.generator,
-                                exception=exception,
-                            )
-                        )
-                case InvocationContinued(
-                    invocation=invocation,
-                    generator=generator,
-                    value=value,
-                ):
-                    self.__queue.put(
-                        SendContinuation(
-                            invocation=invocation,
-                            generator=generator,
-                            value=value,
-                        )
-                    )
-                case InvocationThrew(
-                    invocation=invocation,
-                    generator=generator,
-                    exception=exception,
-                ):
-                    self.__queue.put(
-                        ThrowContinuation(
-                            invocation=invocation,
-                            generator=generator,
-                            exception=exception,
-                        )
-                    )
-                case InvocationSuspended(
-                    invocation=invocation,
-                    generator=generator,
-                    suspension=suspension,
-                ):
-                    continuation = SendContinuation(
-                        invocation=invocation, generator=generator, value=None
-                    )
-                    self.__waiting_on[suspension] = continuation
-
-    def get(self):
-        return self.__queue.get()
-
-
 def main(threads: int = 3):
     bus = Bus()
     enqueued = bus.subscribe(InvocationEnqueued)
+    events = bus.subscribe(
+        {
+            InvocationContinued,
+            InvocationThrew,
+            InvocationErrored,
+            InvocationSucceeded,
+            InvocationSuspended,
+        }
+    )
 
-    queue = SimpleQueue[Invocation]()
+    invocation_queue = SimpleQueue[Invocation]()
+    continuation_queue = SimpleQueue[SendContinuation | ThrowContinuation]()
     running: dict[Future[Any], Invocation | SendContinuation | ThrowContinuation] = {}
-    waiting = Waiting(bus)
+    waiting_on: dict[Invocation, SendContinuation] = {}
 
     bus.publish(InvocationEnqueued(invocation=regular(0, 2)))
     bus.publish(InvocationEnqueued(invocation=irregular()))
@@ -157,17 +87,77 @@ def main(threads: int = 3):
         try:
             while (
                 not enqueued.empty()
-                or not queue.empty()
-                or not waiting.empty()
+                or not events.empty()
+                or not invocation_queue.empty()
+                or not continuation_queue.empty()
                 or running
             ):
                 while not enqueued.empty():
-                    queue.put(enqueued.get().invocation)
+                    invocation_queue.put(enqueued.get().invocation)
 
-                waiting.process()
+                while not events.empty():
+                    match events.get():
+                        case InvocationSucceeded(invocation=invocation, value=value):
+                            if invocation in waiting_on:
+                                continuation = waiting_on.pop(invocation)
+                                bus.publish(
+                                    InvocationContinued(
+                                        invocation=continuation.invocation,
+                                        generator=continuation.generator,
+                                        value=value,
+                                    )
+                                )
+                        case InvocationErrored(
+                            invocation=invocation,
+                            exception=exception,
+                        ):
+                            if invocation in waiting_on:
+                                continuation = waiting_on.pop(invocation)
+                                bus.publish(
+                                    InvocationThrew(
+                                        invocation=continuation.invocation,
+                                        generator=continuation.generator,
+                                        exception=exception,
+                                    )
+                                )
+                        case InvocationContinued(
+                            invocation=invocation,
+                            generator=generator,
+                            value=value,
+                        ):
+                            continuation_queue.put(
+                                SendContinuation(
+                                    invocation=invocation,
+                                    generator=generator,
+                                    value=value,
+                                )
+                            )
+                        case InvocationThrew(
+                            invocation=invocation,
+                            generator=generator,
+                            exception=exception,
+                        ):
+                            continuation_queue.put(
+                                ThrowContinuation(
+                                    invocation=invocation,
+                                    generator=generator,
+                                    exception=exception,
+                                )
+                            )
+                        case InvocationSuspended(
+                            invocation=invocation,
+                            generator=generator,
+                            suspension=suspension,
+                        ):
+                            continuation = SendContinuation(
+                                invocation=invocation,
+                                generator=generator,
+                                value=None,
+                            )
+                            waiting_on[suspension] = continuation
 
-                while len(running) < threads and not waiting.empty():
-                    task = waiting.get()
+                while len(running) < threads and not continuation_queue.empty():
+                    task = continuation_queue.get()
                     bus.publish(InvocationResumed(invocation=task.invocation))
                     if isinstance(task, SendContinuation):
                         future = executor.submit(task.send)
@@ -175,8 +165,8 @@ def main(threads: int = 3):
                         future = executor.submit(task.throw)
                     running[future] = task
 
-                while len(running) < threads and not queue.empty():
-                    task = queue.get()
+                while len(running) < threads and not invocation_queue.empty():
+                    task = invocation_queue.get()
                     bus.publish(InvocationStarted(invocation=task))
                     future = executor.submit(task.run)
                     running[future] = task
@@ -224,7 +214,9 @@ def main(threads: int = 3):
                                 bus.publish(
                                     InvocationContinued(
                                         invocation=task,
-                                        generator=cast(Awaitable[Any], result).__await__(),
+                                        generator=cast(
+                                            Awaitable[Any], result
+                                        ).__await__(),
                                         value=None,
                                     )
                                 )
