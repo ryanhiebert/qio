@@ -64,9 +64,9 @@ async def irregular():
 
 def main(threads: int = 3):
     bus = Bus()
-    enqueued = bus.subscribe(InvocationEnqueued)
     events = bus.subscribe(
         {
+            InvocationEnqueued,
             InvocationContinued,
             InvocationThrew,
             InvocationErrored,
@@ -86,17 +86,15 @@ def main(threads: int = 3):
     with ThreadPoolExecutor(max_workers=threads) as executor:
         try:
             while (
-                not enqueued.empty()
-                or not events.empty()
+                not events.empty()
                 or not invocation_queue.empty()
                 or not continuation_queue.empty()
                 or running
             ):
-                while not enqueued.empty():
-                    invocation_queue.put(enqueued.get().invocation)
-
                 while not events.empty():
                     match events.get():
+                        case InvocationEnqueued(invocation=invocation):
+                            invocation_queue.put(invocation)
                         case InvocationSucceeded(invocation=invocation, value=value):
                             if invocation in waiting_on:
                                 continuation = waiting_on.pop(invocation)
