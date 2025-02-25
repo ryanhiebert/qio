@@ -65,8 +65,7 @@ async def irregular():
 class Waiting:
     def __init__(self, bus: Bus):
         self.__bus = bus
-        self.__waiting: dict[SendContinuation, set[Invocation]] = {}
-        self.__waiting_on: dict[Invocation, set[SendContinuation]] = {}
+        self.__waiting_on: dict[Invocation, SendContinuation] = {}
         self.__queue = SimpleQueue[SendContinuation | ThrowContinuation]()
         self.__events = self.__bus.subscribe(
             {
@@ -121,8 +120,7 @@ class Waiting:
                     continuation = SendContinuation(
                         invocation=invocation, generator=generator, value=None
                     )
-                    self.__waiting[continuation] = {suspension}
-                    self.__waiting_on.setdefault(suspension, set()).add(continuation)
+                    self.__waiting_on[suspension] = continuation
 
     def get(self):
         return self.__queue.get()
@@ -151,30 +149,26 @@ class Waiting:
         )
 
     def complete(self, invocation: Invocation, value: Any):
-        for continuation in self.__waiting_on.pop(invocation, set()):
-            self.__waiting[continuation].remove(invocation)
-            if not self.__waiting[continuation]:
-                del self.__waiting[continuation]
-                self.__bus.publish(
-                    InvocationContinued(
-                        invocation=continuation.invocation,
-                        generator=continuation.generator,
-                        value=value,
-                    )
+        if invocation in self.__waiting_on:
+            continuation = self.__waiting_on.pop(invocation)
+            self.__bus.publish(
+                InvocationContinued(
+                    invocation=continuation.invocation,
+                    generator=continuation.generator,
+                    value=value,
                 )
+            )
 
     def throw(self, invocation: Invocation, exception: Exception):
-        for continuation in self.__waiting_on.pop(invocation, set()):
-            self.__waiting[continuation].remove(invocation)
-            if not self.__waiting[continuation]:
-                del self.__waiting[continuation]
-                self.__bus.publish(
-                    InvocationThrew(
-                        invocation=continuation.invocation,
-                        generator=continuation.generator,
-                        exception=exception,
-                    )
+        if invocation in self.__waiting_on:
+            continuation = self.__waiting_on.pop(invocation)
+            self.__bus.publish(
+                InvocationThrew(
+                    invocation=continuation.invocation,
+                    generator=continuation.generator,
+                    exception=exception,
                 )
+            )
 
 
 def main(threads: int = 3):
