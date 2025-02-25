@@ -13,6 +13,7 @@ from typing import cast
 
 from . import routine
 from .bus import Bus
+from .continuation import Continuation
 from .continuation import SendContinuation
 from .continuation import ThrowContinuation
 from .invocation import Invocation
@@ -74,30 +75,23 @@ def main(threads: int = 3):
             InvocationSuspended,
         }
     )
-
-    invocation_queue = SimpleQueue[Invocation]()
-    continuation_queue = SimpleQueue[SendContinuation | ThrowContinuation]()
-    running: dict[Future[Any], Invocation | SendContinuation | ThrowContinuation] = {}
-    waiting_on: dict[Invocation, SendContinuation] = {}
+    tasks = SimpleQueue[Invocation | SendContinuation | ThrowContinuation]()
+    running: dict[Future[Any], Invocation | Continuation] = {}
+    waiting: dict[Invocation, Continuation] = {}
 
     bus.publish(InvocationEnqueued(invocation=regular(0, 2)))
     bus.publish(InvocationEnqueued(invocation=irregular()))
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
         try:
-            while (
-                not events.empty()
-                or not invocation_queue.empty()
-                or not continuation_queue.empty()
-                or running
-            ):
+            while not events.empty() or not tasks.empty() or running:
                 while not events.empty():
                     match events.get():
                         case InvocationEnqueued(invocation=invocation):
-                            invocation_queue.put(invocation)
+                            tasks.put(invocation)
                         case InvocationSucceeded(invocation=invocation, value=value):
-                            if invocation in waiting_on:
-                                continuation = waiting_on.pop(invocation)
+                            if invocation in waiting:
+                                continuation = waiting.pop(invocation)
                                 bus.publish(
                                     InvocationContinued(
                                         invocation=continuation.invocation,
@@ -109,8 +103,8 @@ def main(threads: int = 3):
                             invocation=invocation,
                             exception=exception,
                         ):
-                            if invocation in waiting_on:
-                                continuation = waiting_on.pop(invocation)
+                            if invocation in waiting:
+                                continuation = waiting.pop(invocation)
                                 bus.publish(
                                     InvocationThrew(
                                         invocation=continuation.invocation,
@@ -123,7 +117,7 @@ def main(threads: int = 3):
                             generator=generator,
                             value=value,
                         ):
-                            continuation_queue.put(
+                            tasks.put(
                                 SendContinuation(
                                     invocation=invocation,
                                     generator=generator,
@@ -135,7 +129,7 @@ def main(threads: int = 3):
                             generator=generator,
                             exception=exception,
                         ):
-                            continuation_queue.put(
+                            tasks.put(
                                 ThrowContinuation(
                                     invocation=invocation,
                                     generator=generator,
@@ -147,81 +141,82 @@ def main(threads: int = 3):
                             generator=generator,
                             suspension=suspension,
                         ):
-                            continuation = SendContinuation(
+                            bus.publish(InvocationEnqueued(invocation=suspension))
+                            continuation = Continuation(
                                 invocation=invocation,
                                 generator=generator,
-                                value=None,
                             )
-                            waiting_on[suspension] = continuation
+                            waiting[suspension] = continuation
 
-                while len(running) < threads and not continuation_queue.empty():
-                    task = continuation_queue.get()
-                    bus.publish(InvocationResumed(invocation=task.invocation))
-                    if isinstance(task, SendContinuation):
-                        future = executor.submit(task.send)
-                    else:
-                        future = executor.submit(task.throw)
-                    running[future] = task
-
-                while len(running) < threads and not invocation_queue.empty():
-                    task = invocation_queue.get()
-                    bus.publish(InvocationStarted(invocation=task))
-                    future = executor.submit(task.run)
-                    running[future] = task
+                while len(running) < threads and not tasks.empty():
+                    match task := tasks.get():
+                        case SendContinuation(invocation=invocation):
+                            bus.publish(InvocationResumed(invocation=invocation))
+                            future = executor.submit(task.send)
+                            running[future] = task
+                        case ThrowContinuation(invocation=invocation):
+                            bus.publish(InvocationResumed(invocation=invocation))
+                            future = executor.submit(task.throw)
+                            running[future] = task
+                        case Invocation():
+                            bus.publish(InvocationStarted(invocation=task))
+                            future = executor.submit(task.run)
+                            running[future] = task
 
                 done, _ = wait(running, return_when=FIRST_COMPLETED)
                 for future in done:
-                    task = running.pop(future)
-                    if isinstance(task, SendContinuation | ThrowContinuation):
-                        try:
-                            suspension = future.result()
-                            bus.publish(
-                                InvocationSuspended(
-                                    invocation=task.invocation,
-                                    generator=task.generator,
-                                    suspension=suspension,
-                                )
-                            )
-                            bus.publish(InvocationEnqueued(invocation=suspension))
-                        except StopIteration as stop:
-                            bus.publish(
-                                InvocationSucceeded(
-                                    invocation=task.invocation,
-                                    value=stop.value,
-                                )
-                            )
-                        except Exception as exception:
-                            bus.publish(
-                                InvocationErrored(
-                                    invocation=task.invocation,
-                                    exception=exception,
-                                )
-                            )
-                    else:
-                        try:
-                            result = future.result()
-                        except Exception as exception:
-                            bus.publish(
-                                InvocationErrored(
-                                    invocation=task,
-                                    exception=exception,
-                                )
-                            )
-                        else:
-                            if isinstance(result, Awaitable):
+                    match task := running.pop(future):
+                        case Continuation(invocation=invocation, generator=generator):
+                            try:
+                                suspension = future.result()
+                            except StopIteration as stop:
                                 bus.publish(
-                                    InvocationContinued(
-                                        invocation=task,
-                                        generator=cast(
-                                            Awaitable[Any], result
-                                        ).__await__(),
-                                        value=None,
+                                    InvocationSucceeded(
+                                        invocation=invocation, value=stop.value
+                                    )
+                                )
+                            except Exception as exception:
+                                bus.publish(
+                                    InvocationErrored(
+                                        invocation=invocation, exception=exception
                                     )
                                 )
                             else:
                                 bus.publish(
-                                    InvocationSucceeded(invocation=task, value=result)
+                                    InvocationSuspended(
+                                        invocation=invocation,
+                                        generator=generator,
+                                        suspension=suspension,
+                                    )
                                 )
+                        case Invocation():
+                            try:
+                                result = future.result()
+                            except Exception as exception:
+                                bus.publish(
+                                    InvocationErrored(
+                                        invocation=task,
+                                        exception=exception,
+                                    )
+                                )
+                            else:
+                                if isinstance(result, Awaitable):
+                                    result = cast(Awaitable[Any], result)
+                                    bus.publish(
+                                        InvocationContinued(
+                                            invocation=task,
+                                            generator=result.__await__(),
+                                            value=None,
+                                        )
+                                    )
+                                else:
+                                    bus.publish(
+                                        InvocationSucceeded(
+                                            invocation=task,
+                                            value=result,
+                                        )
+                                    )
+
         except KeyboardInterrupt:
             print("Shutting down gracefully.")
             executor.shutdown(wait=False, cancel_futures=True)
