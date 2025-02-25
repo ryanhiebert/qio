@@ -16,7 +16,6 @@ from .bus import Bus
 from .continuation import SendContinuation
 from .continuation import ThrowContinuation
 from .invocation import Invocation
-from .invocation import InvocationCompleted
 from .invocation import InvocationContinued
 from .invocation import InvocationEnqueued
 from .invocation import InvocationErrored
@@ -69,61 +68,61 @@ class Waiting:
         self.__waiting: dict[SendContinuation, set[Invocation]] = {}
         self.__waiting_on: dict[Invocation, set[SendContinuation]] = {}
         self.__queue = SimpleQueue[SendContinuation | ThrowContinuation]()
-        self.__continued = self.__bus.subscribe(InvocationContinued)
-        self.__threw = self.__bus.subscribe(InvocationThrew)
-        self.__completed = self.__bus.subscribe(InvocationCompleted)
-        self.__suspended = self.__bus.subscribe(InvocationSuspended)
+        self.__events = self.__bus.subscribe(
+            {
+                InvocationContinued,
+                InvocationThrew,
+                InvocationErrored,
+                InvocationSucceeded,
+                InvocationSuspended,
+            }
+        )
 
     def empty(self):
-        return (
-            self.__queue.empty()
-            and self.__continued.empty()
-            and self.__threw.empty()
-            and self.__completed.empty()
-            and self.__suspended.empty()
-        )
+        return self.__queue.empty() and self.__events.empty()
 
     def process(self):
         """Process the necessary events from the bus."""
-        while not self.__completed.empty():
-            event = self.__completed.get()
-            match event:
+        while not self.__events.empty():
+            match self.__events.get():
                 case InvocationSucceeded(invocation=invocation, value=value):
                     self.complete(invocation, value)
                 case InvocationErrored(invocation=invocation, exception=exception):
                     self.throw(invocation, exception)
-                case _:
-                    raise NotImplementedError("Unexpected!!")
-
-        while not self.__continued.empty():
-            event = self.__continued.get()
-            self.__queue.put(
-                SendContinuation(
-                    invocation=event.invocation,
-                    generator=event.generator,
-                    value=event.value,
-                )
-            )
-
-        while not self.__threw.empty():
-            event = self.__threw.get()
-            self.__queue.put(
-                ThrowContinuation(
-                    invocation=event.invocation,
-                    generator=event.generator,
-                    exception=event.exception,
-                )
-            )
-
-        while not self.__suspended.empty():
-            event = self.__suspended.get()
-            continuation = SendContinuation(
-                invocation=event.invocation,
-                generator=event.generator,
-                value=None,
-            )
-            self.__waiting[continuation] = {event.suspension}
-            self.__waiting_on.setdefault(event.suspension, set()).add(continuation)
+                case InvocationContinued(
+                    invocation=invocation,
+                    generator=generator,
+                    value=value,
+                ):
+                    self.__queue.put(
+                        SendContinuation(
+                            invocation=invocation,
+                            generator=generator,
+                            value=value,
+                        )
+                    )
+                case InvocationThrew(
+                    invocation=invocation,
+                    generator=generator,
+                    exception=exception,
+                ):
+                    self.__queue.put(
+                        ThrowContinuation(
+                            invocation=invocation,
+                            generator=generator,
+                            exception=exception,
+                        )
+                    )
+                case InvocationSuspended(
+                    invocation=invocation,
+                    generator=generator,
+                    suspension=suspension,
+                ):
+                    continuation = SendContinuation(
+                        invocation=invocation, generator=generator, value=None
+                    )
+                    self.__waiting[continuation] = {suspension}
+                    self.__waiting_on.setdefault(suspension, set()).add(continuation)
 
     def get(self):
         return self.__queue.get()
