@@ -85,9 +85,25 @@ class Waiting:
         while not self.__events.empty():
             match self.__events.get():
                 case InvocationSucceeded(invocation=invocation, value=value):
-                    self.complete(invocation, value)
+                    if invocation in self.__waiting_on:
+                        continuation = self.__waiting_on.pop(invocation)
+                        self.__bus.publish(
+                            InvocationContinued(
+                                invocation=continuation.invocation,
+                                generator=continuation.generator,
+                                value=value,
+                            )
+                        )
                 case InvocationErrored(invocation=invocation, exception=exception):
-                    self.throw(invocation, exception)
+                    if invocation in self.__waiting_on:
+                        continuation = self.__waiting_on.pop(invocation)
+                        self.__bus.publish(
+                            InvocationThrew(
+                                invocation=continuation.invocation,
+                                generator=continuation.generator,
+                                exception=exception,
+                            )
+                        )
                 case InvocationContinued(
                     invocation=invocation,
                     generator=generator,
@@ -124,51 +140,6 @@ class Waiting:
 
     def get(self):
         return self.__queue.get()
-
-    def wait(
-        self,
-        continuation: SendContinuation | ThrowContinuation,
-        suspension: Invocation,
-    ):
-        self.__bus.publish(
-            InvocationSuspended(
-                invocation=continuation.invocation,
-                generator=continuation.generator,
-                suspension=suspension,
-            )
-        )
-        self.__bus.publish(InvocationEnqueued(invocation=suspension))
-
-    def start(self, invocation: Invocation, awaitable: Awaitable[Any]):
-        self.__bus.publish(
-            InvocationContinued(
-                invocation=invocation,
-                generator=awaitable.__await__(),
-                value=None,
-            )
-        )
-
-    def complete(self, invocation: Invocation, value: Any):
-        if invocation in self.__waiting_on:
-            continuation = self.__waiting_on.pop(invocation)
-            self.__bus.publish(
-                InvocationContinued(
-                    invocation=continuation.invocation,
-                    generator=continuation.generator,
-                    value=value,
-                )
-            )
-
-    def throw(self, invocation: Invocation, exception: Exception):
-        if invocation in self.__waiting_on:
-            continuation = self.__waiting_on.pop(invocation)
-            self.__bus.publish(
-                InvocationThrew(
-                    invocation=continuation.invocation,
-                    generator=continuation.generator,
-                    exception=exception,
-                )
-            )
 
 
 def main(threads: int = 3):
@@ -215,8 +186,15 @@ def main(threads: int = 3):
                     task = running.pop(future)
                     if isinstance(task, SendContinuation | ThrowContinuation):
                         try:
-                            wait_for = future.result()
-                            waiting.wait(task, wait_for)
+                            suspension = future.result()
+                            bus.publish(
+                                InvocationSuspended(
+                                    invocation=task.invocation,
+                                    generator=task.generator,
+                                    suspension=suspension,
+                                )
+                            )
+                            bus.publish(InvocationEnqueued(invocation=suspension))
                         except StopIteration as stop:
                             bus.publish(
                                 InvocationSucceeded(
@@ -243,7 +221,13 @@ def main(threads: int = 3):
                             )
                         else:
                             if isinstance(result, Awaitable):
-                                waiting.start(task, cast(Awaitable[Any], result))
+                                bus.publish(
+                                    InvocationContinued(
+                                        invocation=task,
+                                        generator=cast(Awaitable[Any], result).__await__(),
+                                        value=None,
+                                    )
+                                )
                             else:
                                 bus.publish(
                                     InvocationSucceeded(invocation=task, value=result)
