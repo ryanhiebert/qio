@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Awaitable
 from concurrent.futures import FIRST_COMPLETED
 from concurrent.futures import Future
-from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import wait
 from contextlib import suppress
 from queue import SimpleQueue
@@ -16,6 +15,7 @@ from .bus import Bus
 from .continuation import Continuation
 from .continuation import SendContinuation
 from .continuation import ThrowContinuation
+from .executor import Executor
 from .invocation import Invocation
 from .invocation import InvocationContinued
 from .invocation import InvocationEnqueued
@@ -60,10 +60,10 @@ async def irregular():
     print("irregular sleep started")
     sleep(1)
     print("irregular sleep ended")
-    return await abstract(2, 2)
+    return await abstract(2, 5)
 
 
-def main(threads: int = 3):
+def main(concurrency: int = 3):
     bus = Bus()
     events = bus.subscribe(
         {
@@ -82,7 +82,7 @@ def main(threads: int = 3):
     bus.publish(InvocationEnqueued(invocation=regular(0, 2)))
     bus.publish(InvocationEnqueued(invocation=irregular()))
 
-    with ThreadPoolExecutor(max_workers=threads) as executor:
+    with Executor(name="qio") as executor:
         try:
             while not events.empty() or not tasks.empty() or running:
                 while not events.empty():
@@ -148,7 +148,7 @@ def main(threads: int = 3):
                             )
                             waiting[suspension] = continuation
 
-                while len(running) < threads and not tasks.empty():
+                while len(running) < concurrency and not tasks.empty():
                     match task := tasks.get():
                         case SendContinuation(invocation=invocation):
                             bus.publish(InvocationResumed(invocation=invocation))
