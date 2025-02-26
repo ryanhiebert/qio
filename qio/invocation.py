@@ -44,6 +44,10 @@ class InvocationEvent:
 
 
 @dataclass(eq=False, kw_only=True, repr=False)
+class InvocationSubmitted(InvocationEvent): ...
+
+
+@dataclass(eq=False, kw_only=True, repr=False)
 class InvocationEnqueued(InvocationEvent): ...
 
 

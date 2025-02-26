@@ -22,6 +22,7 @@ from .invocation import InvocationEnqueued
 from .invocation import InvocationErrored
 from .invocation import InvocationResumed
 from .invocation import InvocationStarted
+from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspended
 from .invocation import InvocationThrew
@@ -67,7 +68,7 @@ def main(concurrency: int = 3):
     bus = Bus()
     events = bus.subscribe(
         {
-            InvocationEnqueued,
+            InvocationSubmitted,
             InvocationContinued,
             InvocationThrew,
             InvocationErrored,
@@ -79,16 +80,17 @@ def main(concurrency: int = 3):
     running: dict[Future[Any], Invocation | Continuation] = {}
     waiting: dict[Invocation, Continuation] = {}
 
-    bus.publish(InvocationEnqueued(invocation=regular(0, 2)))
-    bus.publish(InvocationEnqueued(invocation=irregular()))
+    bus.publish(InvocationSubmitted(invocation=regular(0, 2)))
+    bus.publish(InvocationSubmitted(invocation=irregular()))
 
     with Executor(name="qio") as executor:
         try:
             while not events.empty() or not tasks.empty() or running:
                 while not events.empty():
                     match events.get():
-                        case InvocationEnqueued(invocation=invocation):
+                        case InvocationSubmitted(invocation=invocation):
                             tasks.put(invocation)
+                            bus.publish(InvocationEnqueued(invocation=invocation))
                         case InvocationSucceeded(invocation=invocation, value=value):
                             if invocation in waiting:
                                 continuation = waiting.pop(invocation)
@@ -141,7 +143,7 @@ def main(concurrency: int = 3):
                             generator=generator,
                             suspension=suspension,
                         ):
-                            bus.publish(InvocationEnqueued(invocation=suspension))
+                            bus.publish(InvocationSubmitted(invocation=suspension))
                             continuation = Continuation(
                                 invocation=invocation,
                                 generator=generator,
