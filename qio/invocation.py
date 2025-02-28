@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from collections.abc import Generator
+from concurrent.futures import Future
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import UTC
@@ -52,7 +53,8 @@ class InvocationEnqueued(InvocationEvent): ...
 
 
 @dataclass(eq=False, kw_only=True, repr=False)
-class InvocationStarted(InvocationEvent): ...
+class InvocationStarted(InvocationEvent):
+    future: Future[Any]
 
 
 @dataclass(eq=False, kw_only=True)
@@ -88,7 +90,9 @@ class InvocationThrew(InvocationEvent):
 
 
 @dataclass(eq=False, kw_only=True, repr=False)
-class InvocationResumed(InvocationEvent): ...
+class InvocationResumed(InvocationEvent):
+    generator: Generator[Invocation, Any, Any]
+    future: Future[Any]
 
 
 @dataclass(eq=False, kw_only=True, repr=False)

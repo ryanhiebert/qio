@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Python background queue processing with an async twist"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "pyright>=1.1.394",
+]
 
 [dependency-groups]
 dev = [
