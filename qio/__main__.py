@@ -10,14 +10,14 @@ from functools import partial
 from queue import Empty
 from queue import Queue
 from queue import ShutDown
-from threading import BoundedSemaphore
-from threading import Semaphore
 from time import sleep
 from typing import Any
 from typing import cast
 
 from . import routine
 from .bus import Bus
+from .concurrency import Concurrency
+from .concurrency import Done
 from .continuation import Continuation
 from .continuation import SendContinuation
 from .continuation import ThrowContinuation
@@ -113,14 +113,22 @@ def runner(
     bus: Bus,
     tasks: Queue[Invocation | SendContinuation | ThrowContinuation],
     executor: Executor,
-    concurrency: Semaphore,
+    concurrency: Concurrency,
 ):
     while True:
-        concurrency.acquire()
+        try:
+            concurrency.reserve()
+        except Done:
+            break
 
         try:
             task = tasks.get()
         except ShutDown:
+            break
+
+        try:
+            concurrency.start()
+        except Done:
             break
 
         match task:
@@ -152,7 +160,7 @@ def runner(
                 )
 
 
-def waiter(bus: Bus, concurrency: Semaphore):
+def waiter(bus: Bus, concurrency: Concurrency):
     events = bus.subscribe({InvocationStarted, InvocationResumed})
     shutdown: bool = False
     running: dict[
@@ -218,7 +226,7 @@ def waiter(bus: Bus, concurrency: Semaphore):
                             )
                         )
                     finally:
-                        concurrency.release()
+                        concurrency.stop()
                 case Invocation():
                     try:
                         result = future.result()
@@ -247,7 +255,7 @@ def waiter(bus: Bus, concurrency: Semaphore):
                                 )
                             )
                     finally:
-                        concurrency.release()
+                        concurrency.stop()
 
 
 def continuer(bus: Bus):
@@ -318,7 +326,7 @@ def inspector(bus: Bus):
 def main():
     bus = Bus()
     tasks = Queue[Invocation | SendContinuation | ThrowContinuation]()
-    concurrency = BoundedSemaphore(3)
+    concurrency = Concurrency(3)
 
     with Executor(name="qio") as executor:
         try:
@@ -345,6 +353,7 @@ def main():
             print(actors)
         except KeyboardInterrupt:
             print("Shutting down gracefully.")
+            concurrency.shutdown(wait=True)
         finally:
             bus.shutdown()
             tasks.shutdown(immediate=True)
