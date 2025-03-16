@@ -70,8 +70,8 @@ async def irregular():
     return await abstract(2, 5)
 
 
-def queuer(bus: Bus, tasks: Queue[Invocation | SendContinuation | ThrowContinuation]):
-    events = bus.subscribe({InvocationSubmitted, InvocationContinued, InvocationThrew})
+def invocation_queuer(bus: Bus, tasks: Queue[Invocation]):
+    events = bus.subscribe({InvocationSubmitted})
 
     while True:
         try:
@@ -83,6 +83,18 @@ def queuer(bus: Bus, tasks: Queue[Invocation | SendContinuation | ThrowContinuat
             case InvocationSubmitted(invocation=invocation):
                 tasks.put(invocation)
                 bus.publish(InvocationEnqueued(invocation=invocation))
+
+
+def continuation_queuer(bus: Bus, tasks: Queue[SendContinuation | ThrowContinuation]):
+    events = bus.subscribe({InvocationContinued, InvocationThrew})
+
+    while True:
+        try:
+            event = events.get()
+        except ShutDown:
+            break
+
+        match event:
             case InvocationContinued(
                 invocation=invocation,
                 generator=generator,
@@ -109,9 +121,42 @@ def queuer(bus: Bus, tasks: Queue[Invocation | SendContinuation | ThrowContinuat
                 )
 
 
-def runner(
+def invocation_runner(
     bus: Bus,
-    tasks: Queue[Invocation | SendContinuation | ThrowContinuation],
+    tasks: Queue[Invocation],
+    executor: Executor,
+    concurrency: Concurrency,
+):
+    while True:
+        try:
+            concurrency.reserve()
+        except Done:
+            break
+
+        try:
+            task = tasks.get()
+        except ShutDown:
+            break
+
+        try:
+            concurrency.start()
+        except Done:
+            break
+
+        match task:
+            case Invocation() as task:
+                future = executor.submit(task.run)
+                bus.publish(
+                    InvocationStarted(
+                        invocation=task,
+                        future=future,
+                    )
+                )
+
+
+def continuation_runner(
+    bus: Bus,
+    tasks: Queue[SendContinuation | ThrowContinuation],
     executor: Executor,
     concurrency: Concurrency,
 ):
@@ -150,28 +195,14 @@ def runner(
                         future=future,
                     )
                 )
-            case Invocation() as task:
-                future = executor.submit(task.run)
-                bus.publish(
-                    InvocationStarted(
-                        invocation=task,
-                        future=future,
-                    )
-                )
 
 
-def waiter(bus: Bus, concurrency: Concurrency):
-    events = bus.subscribe({InvocationStarted, InvocationResumed})
+def invocation_waiter(bus: Bus, concurrency: Concurrency):
+    events = bus.subscribe({InvocationStarted})
     shutdown: bool = False
-    running: dict[
-        Future[Any], Invocation | tuple[Invocation, Generator[Invocation, Any, Any]]
-    ] = {}
+    running: dict[Future[Any], Invocation] = {}
 
     while True:
-        # 1. Load up all the futures that are on the bus, watching to break on shutdown
-        # 2. Wait on the futures
-        # 3. When a future is done, publish the result and release the semaphore
-
         while True:
             try:
                 event = events.get(block=False)
@@ -187,47 +218,14 @@ def waiter(bus: Bus, concurrency: Concurrency):
                     future=future,
                 ):
                     running[future] = invocation
-                case InvocationResumed(
-                    invocation=invocation,
-                    future=future,
-                    generator=generator,
-                ):
-                    running[future] = (invocation, generator)
 
         if shutdown and not running:
             break
 
         done, _ = wait(running, return_when=FIRST_COMPLETED)
         for future in done:
-            match task := running.pop(future):
-                case (invocation, generator):
-                    try:
-                        suspension = future.result()
-                    except StopIteration as stop:
-                        bus.publish(
-                            InvocationSucceeded(
-                                invocation=invocation,
-                                value=stop.value,
-                            )
-                        )
-                    except Exception as exception:
-                        bus.publish(
-                            InvocationErrored(
-                                invocation=invocation,
-                                exception=exception,
-                            )
-                        )
-                    else:
-                        bus.publish(
-                            InvocationSuspended(
-                                invocation=invocation,
-                                generator=generator,
-                                suspension=suspension,
-                            )
-                        )
-                    finally:
-                        concurrency.stop()
-                case Invocation():
+            match running.pop(future):
+                case Invocation() as task:
                     try:
                         result = future.result()
                     except Exception as exception:
@@ -254,6 +252,64 @@ def waiter(bus: Bus, concurrency: Concurrency):
                                     value=result,
                                 )
                             )
+                    finally:
+                        concurrency.stop()
+
+
+def continuation_waiter(bus: Bus, concurrency: Concurrency):
+    events = bus.subscribe({InvocationResumed})
+    shutdown: bool = False
+    running: dict[Future[Any], tuple[Invocation, Generator[Invocation, Any, Any]]] = {}
+
+    while True:
+        while True:
+            try:
+                event = events.get(block=False)
+            except Empty:
+                break
+            except ShutDown:
+                shutdown = True
+                break
+
+            match event:
+                case InvocationResumed(
+                    invocation=invocation,
+                    future=future,
+                    generator=generator,
+                ):
+                    running[future] = (invocation, generator)
+
+        if shutdown and not running:
+            break
+
+        done, _ = wait(running, return_when=FIRST_COMPLETED)
+        for future in done:
+            match running.pop(future):
+                case (invocation, generator):
+                    try:
+                        suspension = future.result()
+                    except StopIteration as stop:
+                        bus.publish(
+                            InvocationSucceeded(
+                                invocation=invocation,
+                                value=stop.value,
+                            )
+                        )
+                    except Exception as exception:
+                        bus.publish(
+                            InvocationErrored(
+                                invocation=invocation,
+                                exception=exception,
+                            )
+                        )
+                    else:
+                        bus.publish(
+                            InvocationSuspended(
+                                invocation=invocation,
+                                generator=generator,
+                                suspension=suspension,
+                            )
+                        )
                     finally:
                         concurrency.stop()
 
@@ -325,18 +381,44 @@ def inspector(bus: Bus):
 
 def main():
     bus = Bus()
-    tasks = Queue[Invocation | SendContinuation | ThrowContinuation]()
-    concurrency = Concurrency(3)
+    invocation_tasks = Queue[Invocation]()
+    invocation_concurrency = Concurrency(3)
+    continuation_tasks = Queue[SendContinuation | ThrowContinuation]()
+    continuation_concurrency = Concurrency(3)
 
     with Executor(name="qio") as executor:
         try:
-            # Start up the actors
             actors = {
-                queuer: executor.submit(partial(queuer, bus, tasks)),
-                runner: executor.submit(
-                    partial(runner, bus, tasks, executor, concurrency)
+                invocation_runner: executor.submit(
+                    partial(
+                        invocation_runner,
+                        bus,
+                        invocation_tasks,
+                        executor,
+                        invocation_concurrency,
+                    )
                 ),
-                waiter: executor.submit(partial(waiter, bus, concurrency)),
+                invocation_queuer: executor.submit(
+                    partial(invocation_queuer, bus, invocation_tasks)
+                ),
+                invocation_waiter: executor.submit(
+                    partial(invocation_waiter, bus, invocation_concurrency)
+                ),
+                continuation_runner: executor.submit(
+                    partial(
+                        continuation_runner,
+                        bus,
+                        continuation_tasks,
+                        executor,
+                        continuation_concurrency,
+                    )
+                ),
+                continuation_queuer: executor.submit(
+                    partial(continuation_queuer, bus, continuation_tasks)
+                ),
+                continuation_waiter: executor.submit(
+                    partial(continuation_waiter, bus, continuation_concurrency)
+                ),
                 continuer: executor.submit(partial(continuer, bus)),
                 inspector: executor.submit(partial(inspector, bus)),
             }
@@ -353,10 +435,12 @@ def main():
             print(actors)
         except KeyboardInterrupt:
             print("Shutting down gracefully.")
-            concurrency.shutdown(wait=True)
+            invocation_concurrency.shutdown(wait=True)
+            continuation_concurrency.shutdown(wait=True)
         finally:
             bus.shutdown()
-            tasks.shutdown(immediate=True)
+            invocation_tasks.shutdown(immediate=True)
+            continuation_tasks.shutdown(immediate=True)
 
 
 if __name__ == "__main__":
