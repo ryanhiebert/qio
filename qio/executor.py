@@ -29,11 +29,13 @@ class Executor(BaseExecutor):
         self.__counter = count(1).__next__
 
     @annotate(__doc__=BaseExecutor.submit.__doc__)
-    def submit[T](self, fn: Callable[..., T], *args: Any, **kwargs: Any) -> Future[T]:
+    def submit[T](
+        self, fn: Callable[..., T], /, *args: Any, **kwargs: Any
+    ) -> Future[T]:
         future = Future[T]()
         thread = Thread(
             target=self.__run,
-            name=self.__name,
+            name=f"{self.__name}-{self.__counter()}",
             args=(future, fn, args, kwargs),
         )
         thread.start()

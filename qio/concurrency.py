@@ -1,12 +1,9 @@
 from threading import BoundedSemaphore
+from threading import Lock
 
 
 class Done(Exception):
     """The concurrency semaphore is shut down."""
-
-
-class Reservation:
-    """An object representing a reserved resource."""
 
 
 class Concurrency:
@@ -15,6 +12,7 @@ class Concurrency:
         self._reserved = BoundedSemaphore(limit)
         self._started = BoundedSemaphore(limit)
         self._done = False
+        self._waitlock = Lock()
 
     def reserve(self):
         if self._done:
@@ -38,12 +36,14 @@ class Concurrency:
         self._reserved.release()
         self._started.release()
 
-    def shutdown(self, *, wait: bool = False):
-        if self._done:
-            raise Exception("Already shut down.")
-
+    def shutdown(self, *, wait: bool):
         self._done = True
-        for _ in range(self._limit if wait else 0):
-            self._started.acquire()
-        for _ in range(self._limit if wait else 0):
+        if not wait:
+            return
+
+        with self._waitlock:
+            # Only one thread can wait for all concurrency at a time.
+            for _ in range(self._limit):
+                self._started.acquire()
+        for _ in range(self._limit):
             self._started.release()

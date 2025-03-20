@@ -1,23 +1,24 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Awaitable
-from collections.abc import Generator
 from concurrent.futures import FIRST_COMPLETED
-from concurrent.futures import Future
 from concurrent.futures import wait
 from contextlib import suppress
 from functools import partial
-from queue import Empty
 from queue import Queue
 from queue import ShutDown
 from time import sleep
 from typing import Any
 from typing import cast
 
+from pika import BlockingConnection
+
 from . import routine
 from .bus import Bus
 from .concurrency import Concurrency
 from .concurrency import Done
+from .consumer import Consumer
 from .continuation import Continuation
 from .continuation import SendContinuation
 from .continuation import ThrowContinuation
@@ -32,6 +33,10 @@ from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspended
 from .invocation import InvocationThrew
+from .routine import Routine
+
+INVOCATION_QUEUE_NAME = "qio"
+ROUTINE_REGISTRY: dict[str, Routine] = {}
 
 
 @routine()
@@ -70,8 +75,33 @@ async def irregular():
     return await abstract(2, 5)
 
 
-def invocation_queuer(bus: Bus, tasks: Queue[Invocation]):
+def serialize_invocation(invocation: Invocation, /) -> bytes:
+    ROUTINE_REGISTRY.setdefault(invocation.routine.name, invocation.routine)
+    assert ROUTINE_REGISTRY[invocation.routine.name] == invocation.routine
+    return json.dumps(
+        {
+            "id": invocation.id,
+            "routine": invocation.routine.name,
+            "args": invocation.args,
+            "kwargs": invocation.kwargs,
+        }
+    ).encode()
+
+
+def deserialize_invocation(serialized: bytes, /) -> Invocation:
+    data = json.loads(serialized.decode())
+    return Invocation(
+        id=data["id"],
+        routine=ROUTINE_REGISTRY[data["routine"]],
+        args=data["args"],
+        kwargs=data["kwargs"],
+    )
+
+
+def invocation_queuer(bus: Bus):
     events = bus.subscribe({InvocationSubmitted})
+    channel = BlockingConnection().channel()
+    channel.queue_declare(INVOCATION_QUEUE_NAME)
 
     while True:
         try:
@@ -81,7 +111,11 @@ def invocation_queuer(bus: Bus, tasks: Queue[Invocation]):
 
         match event:
             case InvocationSubmitted(invocation=invocation):
-                tasks.put(invocation)
+                channel.basic_publish(
+                    exchange="",
+                    routing_key=INVOCATION_QUEUE_NAME,
+                    body=serialize_invocation(invocation),
+                )
                 bus.publish(InvocationEnqueued(invocation=invocation))
 
 
@@ -121,11 +155,11 @@ def continuation_queuer(bus: Bus, tasks: Queue[SendContinuation | ThrowContinuat
                 )
 
 
-def invocation_runner(
+def invocation_starter(
     bus: Bus,
-    tasks: Queue[Invocation],
     executor: Executor,
     concurrency: Concurrency,
+    consumer: Consumer,
 ):
     while True:
         try:
@@ -134,27 +168,75 @@ def invocation_runner(
             break
 
         try:
-            task = tasks.get()
-        except ShutDown:
+            delivery_tag, body = next(consumer)
+        except StopIteration:
             break
+
+        invocation = deserialize_invocation(body)
 
         try:
             concurrency.start()
         except Done:
             break
 
-        match task:
-            case Invocation() as task:
-                future = executor.submit(task.run)
+        match invocation:
+            case Invocation():
+                executor.submit(
+                    partial(
+                        invocation_runner,
+                        bus,
+                        concurrency,
+                        consumer,
+                        invocation,
+                        delivery_tag,
+                    )
+                )
                 bus.publish(
                     InvocationStarted(
-                        invocation=task,
-                        future=future,
+                        invocation=invocation,
                     )
                 )
 
 
-def continuation_runner(
+def invocation_runner(
+    bus: Bus,
+    concurrency: Concurrency,
+    consumer: Consumer,
+    invocation: Invocation,
+    delivery_tag: int,
+):
+    try:
+        result = invocation.run()
+    except Exception as exception:
+        bus.publish(
+            InvocationErrored(
+                invocation=invocation,
+                exception=exception,
+            )
+        )
+    else:
+        if isinstance(result, Awaitable):
+            result = cast(Awaitable[Any], result)
+            bus.publish(
+                InvocationContinued(
+                    invocation=invocation,
+                    generator=result.__await__(),
+                    value=None,
+                )
+            )
+        else:
+            bus.publish(
+                InvocationSucceeded(
+                    invocation=invocation,
+                    value=result,
+                )
+            )
+    finally:
+        consumer.ack(delivery_tag)
+        concurrency.stop()
+
+
+def continuation_starter(
     bus: Bus,
     tasks: Queue[SendContinuation | ThrowContinuation],
     executor: Executor,
@@ -167,7 +249,7 @@ def continuation_runner(
             break
 
         try:
-            task = tasks.get()
+            continuation = tasks.get()
         except ShutDown:
             break
 
@@ -176,142 +258,59 @@ def continuation_runner(
         except Done:
             break
 
-        match task:
-            case SendContinuation(invocation=invocation, generator=generator) as task:
-                future = executor.submit(task.send)
-                bus.publish(
-                    InvocationResumed(
-                        invocation=invocation,
-                        generator=generator,
-                        future=future,
-                    )
-                )
-            case ThrowContinuation(invocation=invocation, generator=generator) as task:
-                future = executor.submit(task.throw)
-                bus.publish(
-                    InvocationResumed(
-                        invocation=invocation,
-                        generator=generator,
-                        future=future,
-                    )
-                )
+        bus.publish(
+            InvocationResumed(
+                invocation=continuation.invocation,
+            )
+        )
+        executor.submit(
+            partial(
+                continuation_runner,
+                bus,
+                concurrency,
+                continuation,
+            )
+        )
 
 
-def invocation_waiter(bus: Bus, concurrency: Concurrency):
-    events = bus.subscribe({InvocationStarted})
-    shutdown: bool = False
-    running: dict[Future[Any], Invocation] = {}
+def continuation_runner(
+    bus: Bus,
+    concurrency: Concurrency,
+    continuation: SendContinuation | ThrowContinuation,
+):
+    match continuation:
+        case SendContinuation():
+            method = continuation.send
+        case ThrowContinuation():
+            method = continuation.throw
 
-    while True:
-        while True:
-            try:
-                event = events.get(block=False)
-            except Empty:
-                break
-            except ShutDown:
-                shutdown = True
-                break
-
-            match event:
-                case InvocationStarted(
-                    invocation=invocation,
-                    future=future,
-                ):
-                    running[future] = invocation
-
-        if shutdown and not running:
-            break
-
-        done, _ = wait(running, return_when=FIRST_COMPLETED)
-        for future in done:
-            match running.pop(future):
-                case Invocation() as task:
-                    try:
-                        result = future.result()
-                    except Exception as exception:
-                        bus.publish(
-                            InvocationErrored(
-                                invocation=task,
-                                exception=exception,
-                            )
-                        )
-                    else:
-                        if isinstance(result, Awaitable):
-                            result = cast(Awaitable[Any], result)
-                            bus.publish(
-                                InvocationContinued(
-                                    invocation=task,
-                                    generator=result.__await__(),
-                                    value=None,
-                                )
-                            )
-                        else:
-                            bus.publish(
-                                InvocationSucceeded(
-                                    invocation=task,
-                                    value=result,
-                                )
-                            )
-                    finally:
-                        concurrency.stop()
-
-
-def continuation_waiter(bus: Bus, concurrency: Concurrency):
-    events = bus.subscribe({InvocationResumed})
-    shutdown: bool = False
-    running: dict[Future[Any], tuple[Invocation, Generator[Invocation, Any, Any]]] = {}
-
-    while True:
-        while True:
-            try:
-                event = events.get(block=False)
-            except Empty:
-                break
-            except ShutDown:
-                shutdown = True
-                break
-
-            match event:
-                case InvocationResumed(
-                    invocation=invocation,
-                    future=future,
-                    generator=generator,
-                ):
-                    running[future] = (invocation, generator)
-
-        if shutdown and not running:
-            break
-
-        done, _ = wait(running, return_when=FIRST_COMPLETED)
-        for future in done:
-            match running.pop(future):
-                case (invocation, generator):
-                    try:
-                        suspension = future.result()
-                    except StopIteration as stop:
-                        bus.publish(
-                            InvocationSucceeded(
-                                invocation=invocation,
-                                value=stop.value,
-                            )
-                        )
-                    except Exception as exception:
-                        bus.publish(
-                            InvocationErrored(
-                                invocation=invocation,
-                                exception=exception,
-                            )
-                        )
-                    else:
-                        bus.publish(
-                            InvocationSuspended(
-                                invocation=invocation,
-                                generator=generator,
-                                suspension=suspension,
-                            )
-                        )
-                    finally:
-                        concurrency.stop()
+    invocation, generator = continuation.invocation, continuation.generator
+    try:
+        suspension = method()
+    except StopIteration as stop:
+        bus.publish(
+            InvocationSucceeded(
+                invocation=invocation,
+                value=stop.value,
+            )
+        )
+    except Exception as exception:
+        bus.publish(
+            InvocationErrored(
+                invocation=invocation,
+                exception=exception,
+            )
+        )
+    else:
+        bus.publish(
+            InvocationSuspended(
+                invocation=invocation,
+                generator=generator,
+                suspension=suspension,
+            )
+        )
+    finally:
+        concurrency.stop()
 
 
 def continuer(bus: Bus):
@@ -322,7 +321,7 @@ def continuer(bus: Bus):
             InvocationSuspended,
         }
     )
-    waiting: dict[Invocation, Continuation] = {}
+    waiting: dict[str, Continuation] = {}
 
     while True:
         try:
@@ -335,8 +334,8 @@ def continuer(bus: Bus):
                 invocation=invocation,
                 value=value,
             ):
-                if invocation in waiting:
-                    continuation = waiting.pop(invocation)
+                if invocation.id in waiting:
+                    continuation = waiting.pop(invocation.id)
                     bus.publish(
                         InvocationContinued(
                             invocation=continuation.invocation,
@@ -348,8 +347,8 @@ def continuer(bus: Bus):
                 invocation=invocation,
                 exception=exception,
             ):
-                if invocation in waiting:
-                    continuation = waiting.pop(invocation)
+                if invocation.id in waiting:
+                    continuation = waiting.pop(invocation.id)
                     bus.publish(
                         InvocationThrew(
                             invocation=continuation.invocation,
@@ -363,7 +362,7 @@ def continuer(bus: Bus):
                 suspension=suspension,
             ):
                 bus.publish(InvocationSubmitted(invocation=suspension))
-                waiting[suspension] = Continuation(
+                waiting[suspension.id] = Continuation(
                     invocation=invocation,
                     generator=generator,
                 )
@@ -381,32 +380,32 @@ def inspector(bus: Bus):
 
 def main():
     bus = Bus()
-    invocation_tasks = Queue[Invocation]()
     invocation_concurrency = Concurrency(3)
-    continuation_tasks = Queue[SendContinuation | ThrowContinuation]()
     continuation_concurrency = Concurrency(3)
+    continuation_tasks = Queue[SendContinuation | ThrowContinuation]()
+
+    with BlockingConnection().channel() as channel:
+        channel.queue_declare(INVOCATION_QUEUE_NAME)
+        channel.queue_purge(INVOCATION_QUEUE_NAME)
 
     with Executor(name="qio") as executor:
+        consumer = Consumer(
+            queue=INVOCATION_QUEUE_NAME,
+            prefetch=3,
+        )
         try:
             actors = {
-                invocation_runner: executor.submit(
-                    partial(
-                        invocation_runner,
+                invocation_starter: executor.submit(
+                    lambda: invocation_starter(
                         bus,
-                        invocation_tasks,
                         executor,
                         invocation_concurrency,
+                        consumer,
                     )
                 ),
-                invocation_queuer: executor.submit(
-                    partial(invocation_queuer, bus, invocation_tasks)
-                ),
-                invocation_waiter: executor.submit(
-                    partial(invocation_waiter, bus, invocation_concurrency)
-                ),
-                continuation_runner: executor.submit(
-                    partial(
-                        continuation_runner,
+                invocation_queuer: executor.submit(lambda: invocation_queuer(bus)),
+                continuation_starter: executor.submit(
+                    lambda: continuation_starter(
                         bus,
                         continuation_tasks,
                         executor,
@@ -414,13 +413,10 @@ def main():
                     )
                 ),
                 continuation_queuer: executor.submit(
-                    partial(continuation_queuer, bus, continuation_tasks)
+                    lambda: continuation_queuer(bus, continuation_tasks)
                 ),
-                continuation_waiter: executor.submit(
-                    partial(continuation_waiter, bus, continuation_concurrency)
-                ),
-                continuer: executor.submit(partial(continuer, bus)),
-                inspector: executor.submit(partial(inspector, bus)),
+                continuer: executor.submit(lambda: continuer(bus)),
+                inspector: executor.submit(lambda: inspector(bus)),
             }
 
             # Publish initial records
@@ -439,8 +435,8 @@ def main():
             continuation_concurrency.shutdown(wait=True)
         finally:
             bus.shutdown()
-            invocation_tasks.shutdown(immediate=True)
             continuation_tasks.shutdown(immediate=True)
+            consumer.shutdown()
 
 
 if __name__ == "__main__":
