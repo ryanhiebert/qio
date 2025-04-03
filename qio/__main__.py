@@ -368,7 +368,7 @@ def main():
             InvocationSuspended,
         }
     )
-    inspector_events = bus.subscribe(object)
+    inspector_events = bus.subscribe({object})
 
     with Executor(name="qio") as executor:
         consumer = Consumer(
