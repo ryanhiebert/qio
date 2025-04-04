@@ -37,8 +37,6 @@ class Invocation[T: Callable[..., Any] = Callable[..., Any]]:
 
 
 def serialize(invocation: Invocation, /) -> bytes:
-    ROUTINE_REGISTRY.setdefault(invocation.routine.name, invocation.routine)
-    assert ROUTINE_REGISTRY[invocation.routine.name] == invocation.routine
     return json.dumps(
         {
             "id": invocation.id,

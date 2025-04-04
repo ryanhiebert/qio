@@ -25,6 +25,7 @@ from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
 from .invocation import serialize
+from .invocation import ROUTINE_REGISTRY
 from .worker import continuation_starter
 from .worker import invocation_starter
 
@@ -86,7 +87,6 @@ def continuer(
                 invocation=invocation,
                 value=value,
             ):
-                print(f"Invocation succeeded {invocation.id}")
                 if invocation.id in waiting:
                     continuation = waiting.pop(invocation.id)
                     bus.publish(
@@ -162,14 +162,36 @@ def inspector(events: Queue[object], bus: Bus):
 
 
 def main():
+    ROUTINE_REGISTRY.setdefault(regular.name, regular)
+    ROUTINE_REGISTRY.setdefault(raises.name, raises)
+    ROUTINE_REGISTRY.setdefault(aregular.name, aregular)
+    ROUTINE_REGISTRY.setdefault(irregular.name, irregular)
+
     bus = Bus()
     invocation_concurrency = Concurrency(3)
     continuation_concurrency = Concurrency(3)
     continuations = Queue[SendContinuation | ThrowContinuation]()
 
     channel = BlockingConnection().channel()
-    channel.queue_declare(INVOCATION_QUEUE_NAME)
-    channel.queue_purge(INVOCATION_QUEUE_NAME)
+
+    # Publish initial records
+    invocation1 = regular(0, 2)
+    bus.publish(InvocationSubmitted(invocation=invocation1))
+    channel.basic_publish(
+        exchange="",
+        routing_key=INVOCATION_QUEUE_NAME,
+        body=serialize(invocation1),
+    )
+    bus.publish(InvocationEnqueued(invocation=invocation1))
+
+    invocation2 = irregular()
+    bus.publish(InvocationSubmitted(invocation=invocation2))
+    channel.basic_publish(
+        exchange="",
+        routing_key=INVOCATION_QUEUE_NAME,
+        body=serialize(invocation2),
+    )
+    bus.publish(InvocationEnqueued(invocation=invocation2))
 
     # The subscriptions need to happen before the producing actors start,
     # or else they may miss events that they need to see.
@@ -211,25 +233,6 @@ def main():
                 ),
                 inspector: executor.submit(lambda: inspector(inspector_events, bus)),
             }
-
-            # Publish initial records
-            invocation1 = regular(0, 2)
-            bus.publish(InvocationSubmitted(invocation=invocation1))
-            channel.basic_publish(
-                exchange="",
-                routing_key=INVOCATION_QUEUE_NAME,
-                body=serialize(invocation1),
-            )
-            bus.publish(InvocationEnqueued(invocation=invocation1))
-
-            invocation2 = irregular()
-            bus.publish(InvocationSubmitted(invocation=invocation2))
-            channel.basic_publish(
-                exchange="",
-                routing_key=INVOCATION_QUEUE_NAME,
-                body=serialize(invocation2),
-            )
-            bus.publish(InvocationEnqueued(invocation=invocation2))
 
             # Shut down if any actor finishes
             done, _ = wait(actors.values(), return_when=FIRST_COMPLETED)
