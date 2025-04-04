@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from collections.abc import Generator
 from dataclasses import dataclass
@@ -11,6 +12,9 @@ from typing import cast
 
 from .id import random_id
 from .routine import Routine
+
+
+ROUTINE_REGISTRY: dict[str, Routine] = {}
 
 
 @dataclass(eq=False, kw_only=True)
@@ -31,6 +35,29 @@ class Invocation[T: Callable[..., Any] = Callable[..., Any]]:
             (*map(repr, self.args), *(f"{k}={v!r}" for k, v in self.kwargs.items())),
         )
         return f"<{type(self).__name__} {self.id!r} {self.routine.name}({params_repr})>"
+
+
+def serialize(invocation: Invocation, /) -> bytes:
+    ROUTINE_REGISTRY.setdefault(invocation.routine.name, invocation.routine)
+    assert ROUTINE_REGISTRY[invocation.routine.name] == invocation.routine
+    return json.dumps(
+        {
+            "id": invocation.id,
+            "routine": invocation.routine.name,
+            "args": invocation.args,
+            "kwargs": invocation.kwargs,
+        }
+    ).encode()
+
+
+def deserialize(serialized: bytes, /) -> Invocation:
+    data = json.loads(serialized.decode())
+    return Invocation(
+        id=data["id"],
+        routine=ROUTINE_REGISTRY[data["routine"]],
+        args=data["args"],
+        kwargs=data["kwargs"],
+    )
 
 
 @dataclass(eq=True, kw_only=True)

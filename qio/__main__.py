@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Awaitable
 from concurrent.futures import FIRST_COMPLETED
 from concurrent.futures import wait
@@ -36,10 +35,10 @@ from .invocation import InvocationThrew
 from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
-from .routine import Routine
+from .invocation import deserialize
+from .invocation import serialize
 
 INVOCATION_QUEUE_NAME = "qio"
-ROUTINE_REGISTRY: dict[str, Routine] = {}
 
 
 @routine()
@@ -78,29 +77,6 @@ async def irregular():
     return await abstract(2, 5)
 
 
-def serialize_invocation(invocation: Invocation, /) -> bytes:
-    ROUTINE_REGISTRY.setdefault(invocation.routine.name, invocation.routine)
-    assert ROUTINE_REGISTRY[invocation.routine.name] == invocation.routine
-    return json.dumps(
-        {
-            "id": invocation.id,
-            "routine": invocation.routine.name,
-            "args": invocation.args,
-            "kwargs": invocation.kwargs,
-        }
-    ).encode()
-
-
-def deserialize_invocation(serialized: bytes, /) -> Invocation:
-    data = json.loads(serialized.decode())
-    return Invocation(
-        id=data["id"],
-        routine=ROUTINE_REGISTRY[data["routine"]],
-        args=data["args"],
-        kwargs=data["kwargs"],
-    )
-
-
 def invocation_starter(
     bus: Bus,
     executor: Executor,
@@ -119,7 +95,7 @@ def invocation_starter(
         except StopIteration:
             break
 
-        invocation = deserialize_invocation(body)
+        invocation = deserialize(body)
 
         try:
             concurrency.start()
@@ -359,7 +335,7 @@ def continuer(
                 channel.basic_publish(
                     exchange="",
                     routing_key=INVOCATION_QUEUE_NAME,
-                    body=serialize_invocation(suspension),
+                    body=serialize(suspension),
                 )
                 bus.publish(InvocationEnqueued(invocation=suspension))
                 waiting[suspension.id] = Continuation(
@@ -433,7 +409,7 @@ def main():
             channel.basic_publish(
                 exchange="",
                 routing_key=INVOCATION_QUEUE_NAME,
-                body=serialize_invocation(invocation1),
+                body=serialize(invocation1),
             )
             bus.publish(InvocationEnqueued(invocation=invocation1))
 
@@ -442,7 +418,7 @@ def main():
             channel.basic_publish(
                 exchange="",
                 routing_key=INVOCATION_QUEUE_NAME,
-                body=serialize_invocation(invocation2),
+                body=serialize(invocation2),
             )
             bus.publish(InvocationEnqueued(invocation=invocation2))
 
