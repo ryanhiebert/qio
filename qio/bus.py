@@ -59,15 +59,15 @@ class Bus:
 
     def publish(self, event: Any):
         """Publish to all bus subscribers.
-        
+
         Put on the backing event broker so that remote and local subscribers
         see the event. Requires that the event is serializable.
         """
         self.__remote_publish(event)
-    
+
     def publish_local(self, event: Any):
         """Publish only to local subscribers.
-        
+
         This is useful for events that have properties that are not serializable.
         """
         self.__distribute(event)

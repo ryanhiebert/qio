@@ -13,7 +13,6 @@ from typing import cast
 from .id import random_id
 from .routine import Routine
 
-
 ROUTINE_REGISTRY: dict[str, Routine] = {}
 
 
