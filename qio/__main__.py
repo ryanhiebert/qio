@@ -33,6 +33,9 @@ from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspended
 from .invocation import InvocationThrew
+from .invocation import LocalInvocationContinued
+from .invocation import LocalInvocationSuspended
+from .invocation import LocalInvocationThrew
 from .routine import Routine
 
 INVOCATION_QUEUE_NAME = "qio"
@@ -167,6 +170,12 @@ def invocation_runner(
             bus.publish(
                 InvocationContinued(
                     invocation=invocation,
+                    value=None,
+                )
+            )
+            bus.publish_local(
+                LocalInvocationContinued(
+                    invocation=invocation,
                     generator=generator,
                     value=None,
                 )
@@ -259,6 +268,12 @@ def continuation_runner(
         bus.publish(
             InvocationSuspended(
                 invocation=invocation,
+                suspension=suspension,
+            )
+        )
+        bus.publish_local(
+            LocalInvocationSuspended(
+                invocation=invocation,
                 generator=generator,
                 suspension=suspension,
             )
@@ -268,7 +283,7 @@ def continuation_runner(
 
 
 def continuer(
-    events: Queue[InvocationErrored | InvocationSucceeded | InvocationSuspended],
+    events: Queue[InvocationErrored | InvocationSucceeded | LocalInvocationSuspended],
     bus: Bus,
     continuations: Queue[SendContinuation | ThrowContinuation],
 ):
@@ -291,6 +306,12 @@ def continuer(
                     continuation = waiting.pop(invocation.id)
                     bus.publish(
                         InvocationContinued(
+                            invocation=invocation,
+                            value=value,
+                        )
+                    )
+                    bus.publish_local(
+                        LocalInvocationContinued(
                             invocation=continuation.invocation,
                             generator=continuation.generator,
                             value=value,
@@ -311,6 +332,12 @@ def continuer(
                     continuation = waiting.pop(invocation.id)
                     bus.publish(
                         InvocationThrew(
+                            invocation=invocation,
+                            exception=exception,
+                        )
+                    )
+                    bus.publish_local(
+                        LocalInvocationThrew(
                             invocation=continuation.invocation,
                             generator=continuation.generator,
                             exception=exception,
@@ -323,7 +350,7 @@ def continuer(
                             exception=exception,
                         )
                     )
-            case InvocationSuspended(
+            case LocalInvocationSuspended(
                 invocation=invocation,
                 generator=generator,
                 suspension=suspension,
@@ -365,7 +392,7 @@ def main():
         {
             InvocationErrored,
             InvocationSucceeded,
-            InvocationSuspended,
+            LocalInvocationSuspended,
         }
     )
     inspector_events = bus.subscribe({object})

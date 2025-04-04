@@ -7,7 +7,6 @@ from typing import Any
 from typing import cast
 
 import dill
-
 from pika import BlockingConnection
 
 from .executor import Executor
@@ -16,11 +15,8 @@ from .executor import Executor
 class Bus:
     def __init__(self):
         self.__subscriptions: dict[type, set[Queue[Any]]] = {}
-
         self.__channel_lock = Lock()
-        self.__connection = BlockingConnection()
-        self.__channel = self.__connection.channel()
-
+        self.__channel = BlockingConnection().channel()
         self.__listener_lock = Lock()
         self.__listener: Listener | None = None
 
@@ -46,8 +42,9 @@ class Bus:
         for subscriber in subscribers:
             subscriber.put(event)
 
-    def __remote_publish(self, body: bytes):
+    def __remote_publish(self, event: Any):
         """Remote distribution of events to subscribers."""
+        body = dill.dumps(event)
         with self.__channel_lock:
             self.__channel.basic_publish(
                 exchange="amq.topic",
@@ -61,13 +58,19 @@ class Bus:
         self.__distribute(event)
 
     def publish(self, event: Any):
-        try:
-            body = dill.dumps(event)
-        except Exception:
-            # Unpickleable events get distributed locally
-            self.__distribute(event)
-        else:
-            self.__remote_publish(body)
+        """Publish to all bus subscribers.
+        
+        Put on the backing event broker so that remote and local subscribers
+        see the event. Requires that the event is serializable.
+        """
+        self.__remote_publish(event)
+    
+    def publish_local(self, event: Any):
+        """Publish only to local subscribers.
+        
+        This is useful for events that have properties that are not serializable.
+        """
+        self.__distribute(event)
 
     def shutdown(self):
         with self.__listener_lock:

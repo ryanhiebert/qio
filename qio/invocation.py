@@ -56,8 +56,7 @@ class InvocationStarted(InvocationEvent): ...
 
 
 @dataclass(eq=False, kw_only=True)
-class InvocationSuspended(InvocationEvent):
-    generator: Generator[Invocation, Any, Any]
+class BaseInvocationSuspended(InvocationEvent):
     suspension: Invocation
 
     def __repr__(self):
@@ -68,8 +67,16 @@ class InvocationSuspended(InvocationEvent):
 
 
 @dataclass(eq=False, kw_only=True)
-class InvocationContinued(InvocationEvent):
+class InvocationSuspended(BaseInvocationSuspended): ...
+
+
+@dataclass(eq=False, kw_only=True)
+class LocalInvocationSuspended(BaseInvocationSuspended):
     generator: Generator[Invocation, Any, Any]
+
+
+@dataclass(eq=False, kw_only=True)
+class BaseInvocationContinued(InvocationEvent):
     value: Any
 
     def __repr__(self):
@@ -77,14 +84,31 @@ class InvocationContinued(InvocationEvent):
 
 
 @dataclass(eq=False, kw_only=True)
-class InvocationThrew(InvocationEvent):
+class InvocationContinued(BaseInvocationContinued): ...
+
+
+@dataclass(eq=False, kw_only=True)
+class LocalInvocationContinued(BaseInvocationContinued):
     generator: Generator[Invocation, Any, Any]
+
+
+@dataclass(eq=False, kw_only=True)
+class BaseInvocationThrew(InvocationEvent):
     exception: Exception
 
     def __repr__(self):
         return (
             f"<{type(self).__name__} {self.invocation!r} exception={self.exception!r}>"
         )
+
+
+@dataclass(eq=False, kw_only=True)
+class InvocationThrew(BaseInvocationThrew): ...
+
+
+@dataclass(eq=False, kw_only=True)
+class LocalInvocationThrew(BaseInvocationThrew):
+    generator: Generator[Invocation, Any, Any]
 
 
 @dataclass(eq=False, kw_only=True, repr=False)
