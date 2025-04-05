@@ -90,11 +90,11 @@ class BaseInvocationSuspended(InvocationEvent):
         )
 
 
-@dataclass(eq=False, kw_only=True)
+@dataclass(eq=False, kw_only=True, repr=False)
 class InvocationSuspended(BaseInvocationSuspended): ...
 
 
-@dataclass(eq=False, kw_only=True)
+@dataclass(eq=False, kw_only=True, repr=False)
 class LocalInvocationSuspended(BaseInvocationSuspended):
     generator: Generator[Invocation, Any, Any]
 
@@ -107,11 +107,11 @@ class BaseInvocationContinued(InvocationEvent):
         return f"<{type(self).__name__} {self.invocation!r} value={self.value!r}>"
 
 
-@dataclass(eq=False, kw_only=True)
+@dataclass(eq=False, kw_only=True, repr=False)
 class InvocationContinued(BaseInvocationContinued): ...
 
 
-@dataclass(eq=False, kw_only=True)
+@dataclass(eq=False, kw_only=True, repr=False)
 class LocalInvocationContinued(BaseInvocationContinued):
     generator: Generator[Invocation, Any, Any]
 
@@ -126,11 +126,11 @@ class BaseInvocationThrew(InvocationEvent):
         )
 
 
-@dataclass(eq=False, kw_only=True)
+@dataclass(eq=False, kw_only=True, repr=False)
 class InvocationThrew(BaseInvocationThrew): ...
 
 
-@dataclass(eq=False, kw_only=True)
+@dataclass(eq=False, kw_only=True, repr=False)
 class LocalInvocationThrew(BaseInvocationThrew):
     generator: Generator[Invocation, Any, Any]
 

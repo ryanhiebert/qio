@@ -18,6 +18,6 @@ def routine(*, name: str | None = None):
     def create_routine[T: Callable[..., Any] = Callable[..., Any]](
         fn: T,
     ) -> InvocableRoutine[T]:
-        return InvocableRoutine(fn, name=name or f"{fn.__module__}.{fn.__qualname__}")
+        return InvocableRoutine(fn, name=name or fn.__name__)
 
     return create_routine
