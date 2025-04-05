@@ -6,6 +6,7 @@ from queue import ShutDown
 from time import sleep
 
 from pika import BlockingConnection
+from typer import Typer
 
 from . import routine
 from .bus import Bus
@@ -161,17 +162,17 @@ def inspector(events: Queue[object], bus: Bus):
             break
 
 
-def main():
+app = Typer()
+
+
+@app.command()
+def enqueue():
     ROUTINE_REGISTRY.setdefault(regular.name, regular)
     ROUTINE_REGISTRY.setdefault(raises.name, raises)
     ROUTINE_REGISTRY.setdefault(aregular.name, aregular)
     ROUTINE_REGISTRY.setdefault(irregular.name, irregular)
 
     bus = Bus()
-    invocation_concurrency = Concurrency(3)
-    continuation_concurrency = Concurrency(3)
-    continuations = Queue[SendContinuation | ThrowContinuation]()
-
     channel = BlockingConnection().channel()
 
     # Publish initial records
@@ -193,6 +194,32 @@ def main():
     )
     bus.publish(InvocationEnqueued(invocation=invocation2))
 
+
+@app.command()
+def monitor():
+    bus = Bus()
+    inspector_events = bus.subscribe({object})
+    
+    try:
+        inspector(inspector_events, bus)
+    except KeyboardInterrupt:
+        print("Shutting down gracefully.")
+    finally:
+        bus.shutdown()
+
+
+@app.command()
+def worker():
+    ROUTINE_REGISTRY.setdefault(regular.name, regular)
+    ROUTINE_REGISTRY.setdefault(raises.name, raises)
+    ROUTINE_REGISTRY.setdefault(aregular.name, aregular)
+    ROUTINE_REGISTRY.setdefault(irregular.name, irregular)
+
+    bus = Bus()
+    invocation_concurrency = Concurrency(3)
+    continuation_concurrency = Concurrency(3)
+    continuations = Queue[SendContinuation | ThrowContinuation]()
+
     # The subscriptions need to happen before the producing actors start,
     # or else they may miss events that they need to see.
     continuer_events = bus.subscribe(
@@ -202,7 +229,6 @@ def main():
             LocalInvocationSuspended,
         }
     )
-    inspector_events = bus.subscribe({object})
 
     with Executor(name="qio") as executor:
         consumer = Consumer(
@@ -231,7 +257,6 @@ def main():
                 continuer: executor.submit(
                     lambda: continuer(continuer_events, bus, continuations)
                 ),
-                inspector: executor.submit(lambda: inspector(inspector_events, bus)),
             }
 
             # Shut down if any actor finishes
@@ -250,5 +275,13 @@ def main():
             consumer.shutdown()
 
 
+@app.command()
+def purge():
+    channel = BlockingConnection().channel()
+    channel.queue_declare(queue=INVOCATION_QUEUE_NAME)
+    channel.queue_purge(queue=INVOCATION_QUEUE_NAME)
+    print("Queue purged.")
+
+
 if __name__ == "__main__":
-    main()
+    app()
