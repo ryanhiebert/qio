@@ -24,11 +24,19 @@ from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
 
 
+def consume(consumer: Consumer, queue: Queue[tuple[int, Invocation]]):
+    """Consume the consumer and put them onto the queue."""
+    # This needs to be run in a dedicated thread.
+    for message in consumer:
+        queue.put(message)
+
+
 def invocation_starter(
     bus: Bus,
     executor: Executor,
     concurrency: Concurrency,
     consumer: Consumer,
+    tasks: Queue[tuple[int, Invocation]],
     continuations: Queue[SendContinuation | ThrowContinuation],
 ):
     while True:
@@ -38,8 +46,8 @@ def invocation_starter(
             break
 
         try:
-            delivery_tag, invocation = next(consumer)
-        except StopIteration:
+            delivery_tag, invocation = tasks.get()
+        except ShutDown:
             break
 
         try:

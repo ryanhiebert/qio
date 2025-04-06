@@ -16,12 +16,14 @@ from .continuation import ThrowContinuation
 from .continuer import continuer
 from .executor import Executor
 from .invocation import ROUTINE_REGISTRY
+from .invocation import Invocation
 from .invocation import InvocationEnqueued
 from .invocation import InvocationErrored
 from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import LocalInvocationSuspended
 from .invocation import serialize
+from .worker import consume
 from .worker import continuation_starter
 from .worker import invocation_starter
 
@@ -117,6 +119,7 @@ def worker():
     bus = Bus()
     invocation_concurrency = Concurrency(3)
     continuation_concurrency = Concurrency(3)
+    tasks = Queue[tuple[int, Invocation]]()
     continuations = Queue[SendContinuation | ThrowContinuation]()
 
     # The subscriptions need to happen before the producing actors start,
@@ -136,12 +139,16 @@ def worker():
         )
         try:
             actors = {
+                consume: executor.submit(
+                    lambda: consume(consumer, tasks)
+                ),
                 invocation_starter: executor.submit(
                     lambda: invocation_starter(
                         bus,
                         executor,
                         invocation_concurrency,
                         consumer,
+                        tasks,
                         continuations,
                     )
                 ),
@@ -170,8 +177,9 @@ def worker():
             continuation_concurrency.shutdown(wait=True)
         finally:
             bus.shutdown()
-            continuations.shutdown(immediate=True)
             consumer.shutdown()
+            tasks.shutdown(immediate=True)
+            continuations.shutdown(immediate=True)
 
 
 @app.command()
