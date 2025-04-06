@@ -1,11 +1,12 @@
-from __future__ import annotations
-
 from collections.abc import Callable
 from threading import Lock
 from typing import Any
 from typing import cast
 
 from pika import BlockingConnection
+
+from .invocation import Invocation
+from .invocation import deserialize
 
 
 class Consumer:
@@ -21,9 +22,9 @@ class Consumer:
     def __iter__(self):
         return self
 
-    def __next__(self) -> tuple[int, bytes]:
+    def __next__(self) -> tuple[int, Invocation]:
         method, _, body = next(self.__iterator)
-        return cast(int, method.delivery_tag), body
+        return cast(int, method.delivery_tag), deserialize(body)
 
     def __blocking_callback(self, fn: Callable[[], Any]):
         """Queue a callback and block until it is executed."""

@@ -15,13 +15,13 @@ from .continuation import SendContinuation
 from .continuation import ThrowContinuation
 from .continuer import continuer
 from .executor import Executor
+from .invocation import ROUTINE_REGISTRY
 from .invocation import InvocationEnqueued
 from .invocation import InvocationErrored
 from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import LocalInvocationSuspended
 from .invocation import serialize
-from .invocation import ROUTINE_REGISTRY
 from .worker import continuation_starter
 from .worker import invocation_starter
 
@@ -102,7 +102,7 @@ def enqueue():
 def monitor():
     bus = Bus()
     events = bus.subscribe({object})
-    
+
     try:
         while True:
             print(events.get())

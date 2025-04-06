@@ -1,4 +1,5 @@
 from collections.abc import Awaitable
+from collections.abc import Callable
 from functools import partial
 from queue import Queue
 from queue import ShutDown
@@ -21,9 +22,6 @@ from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspended
 from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
-from .invocation import deserialize
-
-INVOCATION_QUEUE_NAME = "qio"
 
 
 def invocation_starter(
@@ -40,16 +38,18 @@ def invocation_starter(
             break
 
         try:
-            delivery_tag, body = next(consumer)
+            delivery_tag, invocation = next(consumer)
         except StopIteration:
             break
-
-        invocation = deserialize(body)
 
         try:
             concurrency.start()
         except Done:
             break
+        
+        def on_complete(delivery_tag: int):
+            consumer.ack(delivery_tag)
+            concurrency.stop()
 
         match invocation:
             case Invocation():
@@ -57,11 +57,10 @@ def invocation_starter(
                     partial(
                         invocation_runner,
                         bus,
-                        concurrency,
                         consumer,
                         continuations,
                         invocation,
-                        delivery_tag,
+                        partial(on_complete, delivery_tag),
                     )
                 )
                 bus.publish(
@@ -73,11 +72,10 @@ def invocation_starter(
 
 def invocation_runner(
     bus: Bus,
-    concurrency: Concurrency,
     consumer: Consumer,
     continuations: Queue[SendContinuation | ThrowContinuation],
     invocation: Invocation,
-    delivery_tag: int,
+    on_completion: Callable[[], None],
 ):
     try:
         result = invocation.run()
@@ -120,8 +118,7 @@ def invocation_runner(
                 )
             )
     finally:
-        consumer.ack(delivery_tag)
-        concurrency.stop()
+        on_completion()
 
 
 def continuation_starter(
@@ -155,16 +152,16 @@ def continuation_starter(
             partial(
                 continuation_runner,
                 bus,
-                concurrency,
                 continuation,
+                concurrency.stop,
             )
         )
 
 
 def continuation_runner(
     bus: Bus,
-    concurrency: Concurrency,
     continuation: SendContinuation | ThrowContinuation,
+    on_completion: Callable[[], None],
 ):
     match continuation:
         case SendContinuation():
@@ -204,4 +201,4 @@ def continuation_runner(
             )
         )
     finally:
-        concurrency.stop()
+        on_completion()
