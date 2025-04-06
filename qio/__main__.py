@@ -114,11 +114,6 @@ def monitor():
 
 @app.command()
 def worker():
-    ROUTINE_REGISTRY.setdefault(regular.name, regular)
-    ROUTINE_REGISTRY.setdefault(raises.name, raises)
-    ROUTINE_REGISTRY.setdefault(aregular.name, aregular)
-    ROUTINE_REGISTRY.setdefault(irregular.name, irregular)
-
     bus = Bus()
     invocation_concurrency = Concurrency(3)
     continuation_concurrency = Concurrency(3)
