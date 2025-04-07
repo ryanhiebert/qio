@@ -13,7 +13,6 @@ from .concurrency import Concurrency
 from .consumer import Consumer
 from .continuation import SendContinuation
 from .continuation import ThrowContinuation
-from .continuer import continuer
 from .executor import Executor
 from .invocation import ROUTINE_REGISTRY
 from .invocation import Invocation
@@ -24,8 +23,8 @@ from .invocation import InvocationSucceeded
 from .invocation import LocalInvocationSuspended
 from .invocation import serialize
 from .worker import consume
-from .worker import continuation_starter
-from .worker import invocation_starter
+from .worker import continuer
+from .worker import starter
 
 INVOCATION_QUEUE_NAME = "qio"
 
@@ -117,10 +116,8 @@ def monitor():
 @app.command()
 def worker():
     bus = Bus()
-    invocation_concurrency = Concurrency(3)
-    continuation_concurrency = Concurrency(3)
-    tasks = Queue[tuple[int, Invocation]]()
-    continuations = Queue[SendContinuation | ThrowContinuation]()
+    concurrency = Concurrency(3)
+    tasks = Queue[tuple[int, Invocation] | SendContinuation | ThrowContinuation]()
 
     # The subscriptions need to happen before the producing actors start,
     # or else they may miss events that they need to see.
@@ -139,29 +136,18 @@ def worker():
         )
         try:
             actors = {
-                consume: executor.submit(
-                    lambda: consume(consumer, tasks)
-                ),
-                invocation_starter: executor.submit(
-                    lambda: invocation_starter(
+                consume: executor.submit(lambda: consume(consumer, tasks)),
+                starter: executor.submit(
+                    lambda: starter(
                         bus,
                         executor,
-                        invocation_concurrency,
+                        concurrency,
                         consumer,
                         tasks,
-                        continuations,
-                    )
-                ),
-                continuation_starter: executor.submit(
-                    lambda: continuation_starter(
-                        bus,
-                        continuations,
-                        executor,
-                        continuation_concurrency,
                     )
                 ),
                 continuer: executor.submit(
-                    lambda: continuer(continuer_events, bus, continuations)
+                    lambda: continuer(continuer_events, bus, tasks)
                 ),
             }
 
@@ -173,13 +159,11 @@ def worker():
             print(actors)
         except KeyboardInterrupt:
             print("Shutting down gracefully.")
-            invocation_concurrency.shutdown(wait=True)
-            continuation_concurrency.shutdown(wait=True)
+            concurrency.shutdown(wait=True)
         finally:
             bus.shutdown()
             consumer.shutdown()
             tasks.shutdown(immediate=True)
-            continuations.shutdown(immediate=True)
 
 
 @app.command()
