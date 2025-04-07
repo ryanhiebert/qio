@@ -1,7 +1,4 @@
-from concurrent.futures import FIRST_COMPLETED
-from concurrent.futures import wait
 from contextlib import suppress
-from queue import Queue
 from time import sleep
 
 from pika import BlockingConnection
@@ -9,22 +6,11 @@ from typer import Typer
 
 from . import routine
 from .bus import Bus
-from .concurrency import Concurrency
-from .consumer import Consumer
-from .continuation import SendContinuation
-from .continuation import ThrowContinuation
-from .executor import Executor
 from .invocation import ROUTINE_REGISTRY
-from .invocation import Invocation
 from .invocation import InvocationEnqueued
-from .invocation import InvocationErrored
 from .invocation import InvocationSubmitted
-from .invocation import InvocationSucceeded
-from .invocation import LocalInvocationSuspended
 from .invocation import serialize
-from .worker import consume
-from .worker import continuer
-from .worker import starter
+from .worker import Worker
 
 INVOCATION_QUEUE_NAME = "qio"
 
@@ -115,55 +101,14 @@ def monitor():
 
 @app.command()
 def worker():
-    bus = Bus()
-    concurrency = Concurrency(3)
-    tasks = Queue[tuple[int, Invocation] | SendContinuation | ThrowContinuation]()
-
-    # The subscriptions need to happen before the producing actors start,
-    # or else they may miss events that they need to see.
-    continuer_events = bus.subscribe(
-        {
-            InvocationErrored,
-            InvocationSucceeded,
-            LocalInvocationSuspended,
-        }
-    )
-
-    with Executor(name="qio") as executor:
-        consumer = Consumer(
-            queue=INVOCATION_QUEUE_NAME,
-            prefetch=3,
-        )
-        try:
-            actors = {
-                consume: executor.submit(lambda: consume(consumer, tasks)),
-                starter: executor.submit(
-                    lambda: starter(
-                        bus,
-                        executor,
-                        concurrency,
-                        consumer,
-                        tasks,
-                    )
-                ),
-                continuer: executor.submit(
-                    lambda: continuer(continuer_events, bus, tasks)
-                ),
-            }
-
-            # Shut down if any actor finishes
-            done, _ = wait(actors.values(), return_when=FIRST_COMPLETED)
-            for actor in done:
-                actor.result()
-            print("Some actor finished unexpectedly.")
-            print(actors)
-        except KeyboardInterrupt:
-            print("Shutting down gracefully.")
-            concurrency.shutdown(wait=True)
-        finally:
-            bus.shutdown()
-            consumer.shutdown()
-            tasks.shutdown(immediate=True)
+    worker = Worker(concurrency=3)
+    try:
+        worker()
+    except KeyboardInterrupt:
+        print("Shutting down gracefully.")
+        worker.stop()
+    finally:
+        worker.shutdown()
 
 
 @app.command()

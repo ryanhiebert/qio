@@ -1,5 +1,7 @@
 from collections.abc import Awaitable
 from collections.abc import Callable
+from concurrent.futures import FIRST_COMPLETED
+from concurrent.futures import wait
 from functools import partial
 from queue import Queue
 from queue import ShutDown
@@ -284,3 +286,59 @@ def continuer(
                     invocation=invocation,
                     generator=generator,
                 )
+
+
+class Worker:
+    def __init__(self, *, concurrency: int):
+        self.__bus = Bus()
+        self.__concurrency = Concurrency(concurrency)
+        self.__tasks = Queue[
+            tuple[int, Invocation] | SendContinuation | ThrowContinuation
+        ]()
+        self.__consumer = Consumer(queue=INVOCATION_QUEUE_NAME, prefetch=concurrency)
+        # The subscriptions need to happen before the producing actors start,
+        # or else they may miss events that they need to see.
+        self.__continuer_events = self.__bus.subscribe(
+            {
+                InvocationErrored,
+                InvocationSucceeded,
+                LocalInvocationSuspended,
+            }
+        )
+        self.__executor = Executor(name="qio-worker")
+
+    def __call__(self):
+        actors = {
+            consume: self.__executor.submit(
+                lambda: consume(self.__consumer, self.__tasks)
+            ),
+            starter: self.__executor.submit(
+                lambda: starter(
+                    self.__bus,
+                    self.__executor,
+                    self.__concurrency,
+                    self.__consumer,
+                    self.__tasks,
+                )
+            ),
+            continuer: self.__executor.submit(
+                lambda: continuer(self.__continuer_events, self.__bus, self.__tasks)
+            ),
+        }
+
+        # Shut down if any actor finishes
+        done, _ = wait(actors.values(), return_when=FIRST_COMPLETED)
+        for actor in done:
+            actor.result()
+        print("Some actor finished unexpectedly.")
+        print(actors)
+
+    def stop(self):
+        self.__concurrency.shutdown(wait=True)
+
+    def shutdown(self):
+        self.__concurrency.shutdown(wait=False)
+        self.__bus.shutdown()
+        self.__consumer.shutdown()
+        self.__tasks.shutdown(immediate=True)
+        self.__executor.shutdown(wait=True)
