@@ -15,7 +15,7 @@ class Consumer:
     def __init__(self, *, queue: str, prefetch: int):
         self.__connection = BlockingConnection()
         self.__channel = self.__connection.channel()
-        self.__channel.queue_declare(queue=queue)
+        self.__channel.queue_declare(queue=queue, durable=True)
         self.__channel.basic_qos(prefetch_count=prefetch)
         self.__iterator = self.__channel.consume(queue=queue)
 

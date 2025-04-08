@@ -114,7 +114,7 @@ def worker():
 @app.command()
 def purge():
     channel = BlockingConnection().channel()
-    channel.queue_declare(queue=INVOCATION_QUEUE_NAME)
+    channel.queue_declare(queue=INVOCATION_QUEUE_NAME, durable=True)
     channel.queue_purge(queue=INVOCATION_QUEUE_NAME)
     print("Queue purged.")
 
