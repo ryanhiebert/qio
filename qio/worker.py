@@ -8,8 +8,6 @@ from queue import ShutDown
 from typing import Any
 from typing import cast
 
-from pika import BlockingConnection
-
 from .bus import Bus
 from .concurrency import Concurrency
 from .concurrency import Done
@@ -20,18 +18,16 @@ from .continuation import ThrowContinuation
 from .executor import Executor
 from .invocation import Invocation
 from .invocation import InvocationContinued
-from .invocation import InvocationEnqueued
 from .invocation import InvocationErrored
 from .invocation import InvocationResumed
 from .invocation import InvocationStarted
-from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspended
 from .invocation import InvocationThrew
 from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
-from .invocation import serialize
+from .producer import Producer
 
 INVOCATION_QUEUE_NAME = "qio"
 
@@ -208,7 +204,7 @@ def continuer(
     bus: Bus,
     tasks: Queue[tuple[int, Invocation] | SendContinuation | ThrowContinuation],
 ):
-    channel = BlockingConnection().channel()
+    producer = Producer()
     waiting: dict[str, Continuation] = {}
 
     while True:
@@ -275,13 +271,7 @@ def continuer(
                 generator=generator,
                 suspension=suspension,
             ):
-                bus.publish(InvocationSubmitted(invocation=suspension))
-                channel.basic_publish(
-                    exchange="",
-                    routing_key=INVOCATION_QUEUE_NAME,
-                    body=serialize(suspension),
-                )
-                bus.publish(InvocationEnqueued(invocation=suspension))
+                producer.submit(suspension)
                 waiting[suspension.id] = Continuation(
                     invocation=invocation,
                     generator=generator,

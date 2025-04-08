@@ -9,9 +9,10 @@ from typing import Any
 from typing import cast
 
 from .id import random_id
+from .registry import ROUTINE_REGISTRY
 from .routine import Routine
 
-ROUTINE_REGISTRY: dict[str, Routine] = {}
+INVOCATION_QUEUE_NAME = "qio"
 
 
 @dataclass(eq=False, kw_only=True)

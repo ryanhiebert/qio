@@ -6,13 +6,9 @@ from typer import Typer
 
 from . import routine
 from .bus import Bus
-from .invocation import ROUTINE_REGISTRY
-from .invocation import InvocationEnqueued
-from .invocation import InvocationSubmitted
-from .invocation import serialize
+from .invocation import INVOCATION_QUEUE_NAME
+from .producer import Producer
 from .worker import Worker
-
-INVOCATION_QUEUE_NAME = "qio"
 
 
 @routine()
@@ -51,38 +47,14 @@ async def irregular():
     return await abstract(2, 5)
 
 
-ROUTINE_REGISTRY.setdefault(regular.name, regular)
-ROUTINE_REGISTRY.setdefault(raises.name, raises)
-ROUTINE_REGISTRY.setdefault(aregular.name, aregular)
-ROUTINE_REGISTRY.setdefault(irregular.name, irregular)
-
-
 app = Typer()
 
 
 @app.command()
 def enqueue():
-    bus = Bus()
-    channel = BlockingConnection().channel()
-
-    # Publish initial records
-    invocation1 = regular(0, 2)
-    bus.publish(InvocationSubmitted(invocation=invocation1))
-    channel.basic_publish(
-        exchange="",
-        routing_key=INVOCATION_QUEUE_NAME,
-        body=serialize(invocation1),
-    )
-    bus.publish(InvocationEnqueued(invocation=invocation1))
-
-    invocation2 = irregular()
-    bus.publish(InvocationSubmitted(invocation=invocation2))
-    channel.basic_publish(
-        exchange="",
-        routing_key=INVOCATION_QUEUE_NAME,
-        body=serialize(invocation2),
-    )
-    bus.publish(InvocationEnqueued(invocation=invocation2))
+    producer = Producer()
+    producer.submit(regular(0, 2))
+    producer.submit(irregular())
 
 
 @app.command()
