@@ -31,11 +31,10 @@ from .producer import Producer
 
 INVOCATION_QUEUE_NAME = "qio"
 
+Task = tuple[int, Invocation] | SendContinuation | ThrowContinuation
 
-def consume(
-    consumer: Consumer,
-    queue: Queue[tuple[int, Invocation] | SendContinuation | ThrowContinuation],
-):
+
+def consume(consumer: Consumer,queue: Queue[Task]):
     """Consume the consumer and put them onto the queue."""
     # This needs to be run in a dedicated thread.
     for message in consumer:
@@ -47,7 +46,7 @@ def starter(
     executor: Executor,
     concurrency: Concurrency,
     consumer: Consumer,
-    tasks: Queue[tuple[int, Invocation] | SendContinuation | ThrowContinuation],
+    tasks: Queue[Task],
 ):
     while True:
         try:
@@ -105,7 +104,7 @@ def starter(
 def invocation_runner(
     bus: Bus,
     consumer: Consumer,
-    continuations: Queue[tuple[int, Invocation] | SendContinuation | ThrowContinuation],
+    continuations: Queue[Task],
     invocation: Invocation,
     on_completion: Callable[[], None],
 ):
@@ -202,7 +201,7 @@ def continuation_runner(
 def continuer(
     events: Queue[InvocationErrored | InvocationSucceeded | LocalInvocationSuspended],
     bus: Bus,
-    tasks: Queue[tuple[int, Invocation] | SendContinuation | ThrowContinuation],
+    tasks: Queue[Task],
 ):
     producer = Producer()
     waiting: dict[str, Continuation] = {}
@@ -283,7 +282,7 @@ class Worker:
         self.__bus = Bus()
         self.__concurrency = Concurrency(concurrency)
         self.__tasks = Queue[
-            tuple[int, Invocation] | SendContinuation | ThrowContinuation
+            Task
         ]()
         self.__consumer = Consumer(queue=INVOCATION_QUEUE_NAME, prefetch=concurrency)
         # The subscriptions need to happen before the producing actors start,
