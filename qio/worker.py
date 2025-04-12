@@ -5,6 +5,7 @@ from concurrent.futures import wait
 from functools import partial
 from queue import Queue
 from queue import ShutDown
+from threading import Event
 from typing import Any
 from typing import cast
 
@@ -197,13 +198,17 @@ def continuation_runner(
         on_completion()
 
 
-def continuer(
-    events: Queue[InvocationErrored | InvocationSucceeded | LocalInvocationSuspended],
-    bus: Bus,
-    tasks: Queue[Task],
-):
+def continuer(started: Event, bus: Bus, tasks: Queue[Task]):
     producer = Producer()
+    events = bus.subscribe(
+        {
+            InvocationErrored,
+            InvocationSucceeded,
+            LocalInvocationSuspended,
+        }
+    )
     waiting: dict[str, Continuation] = {}
+    started.set()
 
     while True:
         try:
@@ -286,42 +291,40 @@ class Worker:
         self.__concurrency = Concurrency(concurrency)
         self.__tasks = Queue[Task]()
         self.__consumer = Consumer(queue=INVOCATION_QUEUE_NAME, prefetch=concurrency)
-        # The subscriptions need to happen before the producing actors start,
-        # or else they may miss events that they need to see.
-        self.__continuer_events = self.__bus.subscribe(
-            {
-                InvocationErrored,
-                InvocationSucceeded,
-                LocalInvocationSuspended,
-            }
-        )
         self.__executor = Executor(name="qio-worker")
 
     def __call__(self):
-        actors = {
-            consume: self.__executor.submit(
-                lambda: consume(self.__consumer, self.__tasks)
-            ),
-            starter: self.__executor.submit(
-                lambda: starter(
-                    self.__bus,
-                    self.__executor,
-                    self.__concurrency,
-                    self.__consumer,
-                    self.__tasks,
-                )
-            ),
-            continuer: self.__executor.submit(
-                lambda: continuer(self.__continuer_events, self.__bus, self.__tasks)
-            ),
+        continuer_started = Event()
+        continuer_future = self.__executor.submit(
+            lambda: continuer(continuer_started, self.__bus, self.__tasks)
+        )
+        continuer_started.wait()
+
+        starter_future = self.__executor.submit(
+            lambda: starter(
+                self.__bus,
+                self.__executor,
+                self.__concurrency,
+                self.__consumer,
+                self.__tasks,
+            )
+        )
+        consume_future = self.__executor.submit(
+            lambda: consume(self.__consumer, self.__tasks)
+        )
+
+        futures = {
+            "continuer": continuer_future,
+            "starter": starter_future,
+            "consumer": consume_future,
         }
 
         # Shut down if any actor finishes
-        done, _ = wait(actors.values(), return_when=FIRST_COMPLETED)
-        for actor in done:
-            actor.result()
+        done, _ = wait(futures.values(), return_when=FIRST_COMPLETED)
+        for future in done:
+            future.result()
         print("Some actor finished unexpectedly.")
-        print(actors)
+        print(futures)
 
     def stop(self):
         self.__concurrency.shutdown(wait=True)
