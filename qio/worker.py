@@ -75,7 +75,6 @@ def starter(
                     partial(
                         invocation_runner,
                         bus,
-                        consumer,
                         tasks,
                         invocation,
                         partial(on_complete, delivery_tag),
@@ -104,7 +103,6 @@ def starter(
 
 def invocation_runner(
     bus: Bus,
-    consumer: Consumer,
     continuations: Queue[Task],
     invocation: Invocation,
     on_completion: Callable[[], None],
