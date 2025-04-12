@@ -11,6 +11,7 @@ from typing import cast
 from .id import random_id
 from .registry import ROUTINE_REGISTRY
 from .routine import Routine
+from .suspension import Suspension
 
 INVOCATION_QUEUE_NAME = "qio"
 
@@ -26,13 +27,23 @@ class Invocation[T: Callable[..., Any] = Callable[..., Any]]:
         return self.routine.fn(*self.args, **self.kwargs)
 
     def __await__(self) -> Any:
-        return cast(Any, (yield self))
+        return cast(Any, (yield InvocationSuspension(invocation=self)))
 
     def __repr__(self):
         params_repr = ", ".join(
             (*map(repr, self.args), *(f"{k}={v!r}" for k, v in self.kwargs.items())),
         )
         return f"<{type(self).__name__} {self.id!r} {self.routine.name}({params_repr})>"
+
+
+@dataclass(eq=False, kw_only=True)
+class InvocationSuspension[T: Callable[..., Any] = Callable[..., Any]](Suspension):
+    """A suspension that contains an invocation."""
+
+    invocation: Invocation[T]
+
+    def __repr__(self):
+        return f"<{type(self).__name__} {self.invocation!r}>"
 
 
 def serialize(invocation: Invocation, /) -> bytes:

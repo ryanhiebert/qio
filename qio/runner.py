@@ -14,7 +14,7 @@ def run[R](invocation: Invocation[Callable[..., R]]) -> R:
     producer = Producer()
     completions = bus.subscribe({InvocationSucceeded, InvocationErrored})
     producer.submit(invocation)
-    
+
     try:
         while True:
             match completions.get():

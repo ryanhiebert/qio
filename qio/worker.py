@@ -23,6 +23,7 @@ from .invocation import InvocationResumed
 from .invocation import InvocationStarted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspended
+from .invocation import InvocationSuspension
 from .invocation import InvocationThrew
 from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
@@ -34,7 +35,7 @@ INVOCATION_QUEUE_NAME = "qio"
 Task = tuple[int, Invocation] | SendContinuation | ThrowContinuation
 
 
-def consume(consumer: Consumer,queue: Queue[Task]):
+def consume(consumer: Consumer, queue: Queue[Task]):
     """Consume the consumer and put them onto the queue."""
     # This needs to be run in a dedicated thread.
     for message in consumer:
@@ -270,8 +271,12 @@ def continuer(
                 generator=generator,
                 suspension=suspension,
             ):
-                producer.submit(suspension)
-                waiting[suspension.id] = Continuation(
+                if not isinstance(suspension, InvocationSuspension):
+                    raise TypeError(
+                        f"Expected InvocationSuspension, got {type(suspension)}"
+                    )
+                producer.submit(suspension.invocation)
+                waiting[suspension.invocation.id] = Continuation(
                     invocation=invocation,
                     generator=generator,
                 )
@@ -281,9 +286,7 @@ class Worker:
     def __init__(self, *, concurrency: int):
         self.__bus = Bus()
         self.__concurrency = Concurrency(concurrency)
-        self.__tasks = Queue[
-            Task
-        ]()
+        self.__tasks = Queue[Task]()
         self.__consumer = Consumer(queue=INVOCATION_QUEUE_NAME, prefetch=concurrency)
         # The subscriptions need to happen before the producing actors start,
         # or else they may miss events that they need to see.
