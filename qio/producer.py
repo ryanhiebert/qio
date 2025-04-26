@@ -18,6 +18,9 @@ class Producer:
 
     def submit(self, invocation: Invocation):
         self.__bus.publish(InvocationSubmitted(invocation=invocation))
+        self.enqueue(invocation)
+
+    def enqueue(self, invocation: Invocation):
         with self.__channel_lock:
             self.__channel.basic_publish(
                 exchange="",
