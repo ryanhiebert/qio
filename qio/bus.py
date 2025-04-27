@@ -3,13 +3,12 @@ from collections.abc import Iterable
 from itertools import chain
 from queue import Queue
 from threading import Lock
+from threading import Thread
 from typing import Any
 from typing import cast
 
 import dill
 from pika import BlockingConnection
-
-from .executor import Executor
 
 
 class Bus:
@@ -89,8 +88,8 @@ class Listener:
             str, self.__channel.queue_declare("", exclusive=True).method.queue
         )
         self.__channel.queue_bind(self.__queue, "amq.topic", routing_key="#")
-        self.__executor = Executor(name="qio-bus-listener")
-        self.__executor.submit(self.__listen)
+        self.__thread = Thread(target=self.__listen, name="qio-bus-listener")
+        self.__thread.start()
 
     def shutdown(self):
         lock = Lock()
@@ -102,7 +101,9 @@ class Listener:
 
         self.__connection.add_callback_threadsafe(callback)
         with lock:
-            return
+            pass
+
+        self.__thread.join()
 
     def __listen(self):
         for _, _, body in self.__channel.consume(self.__queue, auto_ack=True):
