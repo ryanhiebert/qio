@@ -82,7 +82,6 @@ class Bus:
 
 class Listener:
     def __init__(self, receive: Callable[[bytes], None], /):
-        self.running: bool = False
         self.__receive = receive
         self.__connection = BlockingConnection()
         self.__channel = self.__connection.channel()
@@ -106,9 +105,5 @@ class Listener:
             return
 
     def __listen(self):
-        self.running = True
-        try:
-            for _, _, body in self.__channel.consume(self.__queue, auto_ack=True):
-                self.__receive(body)
-        finally:
-            self.running = False
+        for _, _, body in self.__channel.consume(self.__queue, auto_ack=True):
+            self.__receive(body)
