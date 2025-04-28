@@ -36,7 +36,7 @@ INVOCATION_QUEUE_NAME = "qio"
 Task = tuple[int, Invocation] | SendContinuation | ThrowContinuation
 
 
-def consume(consumer: Consumer, queue: Queue[Task]):
+def receiver(consumer: Consumer, queue: Queue[Task]):
     """Consume the consumer and put them onto the queue."""
     # This needs to be run in a dedicated thread.
     for message in consumer:
@@ -310,7 +310,7 @@ class Worker:
             )
         )
         consume_future = self.__executor.submit(
-            lambda: consume(self.__consumer, self.__tasks)
+            lambda: receiver(self.__consumer, self.__tasks)
         )
 
         futures = {
