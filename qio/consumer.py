@@ -52,3 +52,4 @@ class Consumer:
 
     def __shutdown(self):
         self.__channel.cancel()
+        self.__connection.close()
