@@ -5,14 +5,12 @@ from contextlib import suppress
 from queue import Queue
 from queue import ShutDown
 from threading import Event
-from threading import Thread
 
 from .bus import Bus
 from .consumer import Consumer
 from .continuation import Continuation
 from .continuation import SendContinuation
 from .continuation import ThrowContinuation
-from .executor import Executor
 from .invocation import Invocation
 from .invocation import InvocationContinued
 from .invocation import InvocationErrored
@@ -27,6 +25,7 @@ from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
 from .producer import Producer
 from .task import Task
+from .thread import Thread
 
 INVOCATION_QUEUE_NAME = "qio"
 
@@ -36,19 +35,54 @@ class Worker:
         self.__bus = Bus()
         self.__tasks = Queue[Task]()
         self.__consumer = Consumer(queue=INVOCATION_QUEUE_NAME, prefetch=concurrency)
-        self.__executor = Executor(name="qio-worker")
         self.__threads = [
             Thread(target=self.__run, daemon=False) for _ in range(concurrency)
         ]
+        self.__continuer_started = Event()
+        self.__continuer_thread = Thread(
+            target=lambda: self.__continuer(self.__continuer_started),
+            name="qio-continuer",
+        )
+        self.__receiver_thread = Thread(
+            target=self.__receiver,
+            name="qio-receiver",
+        )
+
+    def __call__(self):
         for thread in self.__threads:
             thread.start()
 
+        self.__continuer_thread.start()
+        self.__continuer_started.wait()
+        self.__receiver_thread.start()
+
+        futures = {
+            "continuer": self.__continuer_thread.future,
+            "receiver": self.__receiver_thread.future,
+        }
+
+        done, _ = wait(futures.values(), return_when=FIRST_COMPLETED)
+        for future in done:
+            future.result()
+        print("Some actor finished unexpectedly.")
+        print(futures)
+
     def __receiver(self):
-        """Consume the consumer and put them onto the queue."""
+        """Put messages from the consumer onto the queue.
+
+        This actor is dedicated to reading the queue and keeping the
+        consumer active.
+        """
         for message in self.__consumer:
             self.__tasks.put(message)
 
     def __continuer(self, started: Event):
+        """Continue suspended invocations.
+
+        This actor watches for completed or errored invocations that are
+        blocking suspended invocations, and sends their continuations to the
+        task queue to be resumed.
+        """
         producer = Producer()
         events = self.__bus.subscribe(
             {
@@ -227,27 +261,6 @@ class Worker:
                         )
                     )
 
-    def __call__(self):
-        continuer_started = Event()
-        continuer_future = self.__executor.submit(
-            lambda: self.__continuer(continuer_started)
-        )
-        continuer_started.wait()
-
-        receive_future = self.__executor.submit(lambda: self.__receiver())
-
-        futures = {
-            "continuer": continuer_future,
-            "receiver": receive_future,
-        }
-
-        # Shut down if any actor finishes
-        done, _ = wait(futures.values(), return_when=FIRST_COMPLETED)
-        for future in done:
-            future.result()
-        print("Some actor finished unexpectedly.")
-        print(futures)
-
     def stop(self):
         self.__tasks.shutdown(immediate=True)
         # In the future, we should not shutdown immediately, we should
@@ -260,4 +273,7 @@ class Worker:
         self.__tasks.shutdown(immediate=True)
         self.__bus.shutdown()
         self.__consumer.shutdown()
-        self.__executor.shutdown(wait=True)
+        self.__continuer_thread.join()
+        self.__receiver_thread.join()
+        for thread in self.__threads:
+            thread.join()
