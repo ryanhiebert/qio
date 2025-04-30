@@ -31,100 +31,6 @@ from .task import Task
 INVOCATION_QUEUE_NAME = "qio"
 
 
-def receiver(consumer: Consumer, queue: Queue[Task]):
-    """Consume the consumer and put them onto the queue."""
-    # This needs to be run in a dedicated thread.
-    for message in consumer:
-        queue.put(message)
-
-
-def continuer(started: Event, bus: Bus, tasks: Queue[Task]):
-    producer = Producer()
-    events = bus.subscribe(
-        {
-            InvocationErrored,
-            InvocationSucceeded,
-            LocalInvocationSuspended,
-        }
-    )
-    waiting: dict[str, Continuation] = {}
-    started.set()
-
-    while True:
-        try:
-            event = events.get()
-        except ShutDown:
-            break
-
-        match event:
-            case InvocationSucceeded(
-                invocation=invocation,
-                value=value,
-            ):
-                if invocation.id in waiting:
-                    continuation = waiting.pop(invocation.id)
-                    bus.publish(
-                        InvocationContinued(
-                            invocation=invocation,
-                            value=value,
-                        )
-                    )
-                    bus.publish_local(
-                        LocalInvocationContinued(
-                            invocation=continuation.invocation,
-                            generator=continuation.generator,
-                            value=value,
-                        )
-                    )
-                    tasks.put(
-                        SendContinuation(
-                            invocation=continuation.invocation,
-                            generator=continuation.generator,
-                            value=value,
-                        )
-                    )
-            case InvocationErrored(
-                invocation=invocation,
-                exception=exception,
-            ):
-                if invocation.id in waiting:
-                    continuation = waiting.pop(invocation.id)
-                    bus.publish(
-                        InvocationThrew(
-                            invocation=invocation,
-                            exception=exception,
-                        )
-                    )
-                    bus.publish_local(
-                        LocalInvocationThrew(
-                            invocation=continuation.invocation,
-                            generator=continuation.generator,
-                            exception=exception,
-                        )
-                    )
-                    tasks.put(
-                        ThrowContinuation(
-                            invocation=continuation.invocation,
-                            generator=continuation.generator,
-                            exception=exception,
-                        )
-                    )
-            case LocalInvocationSuspended(
-                invocation=invocation,
-                generator=generator,
-                suspension=suspension,
-            ):
-                if not isinstance(suspension, InvocationSuspension):
-                    raise TypeError(
-                        f"Expected InvocationSuspension, got {type(suspension)}"
-                    )
-                producer.submit(suspension.invocation)
-                waiting[suspension.invocation.id] = Continuation(
-                    invocation=invocation,
-                    generator=generator,
-                )
-
-
 class Worker:
     def __init__(self, *, concurrency: int):
         self.__bus = Bus()
@@ -136,6 +42,97 @@ class Worker:
         ]
         for thread in self.__threads:
             thread.start()
+
+    def __receiver(self):
+        """Consume the consumer and put them onto the queue."""
+        for message in self.__consumer:
+            self.__tasks.put(message)
+
+    def __continuer(self, started: Event):
+        producer = Producer()
+        events = self.__bus.subscribe(
+            {
+                InvocationErrored,
+                InvocationSucceeded,
+                LocalInvocationSuspended,
+            }
+        )
+        waiting: dict[str, Continuation] = {}
+        started.set()
+
+        while True:
+            try:
+                event = events.get()
+            except ShutDown:
+                break
+
+            match event:
+                case InvocationSucceeded(
+                    invocation=invocation,
+                    value=value,
+                ):
+                    if invocation.id in waiting:
+                        continuation = waiting.pop(invocation.id)
+                        self.__bus.publish(
+                            InvocationContinued(
+                                invocation=invocation,
+                                value=value,
+                            )
+                        )
+                        self.__bus.publish_local(
+                            LocalInvocationContinued(
+                                invocation=continuation.invocation,
+                                generator=continuation.generator,
+                                value=value,
+                            )
+                        )
+                        self.__tasks.put(
+                            SendContinuation(
+                                invocation=continuation.invocation,
+                                generator=continuation.generator,
+                                value=value,
+                            )
+                        )
+                case InvocationErrored(
+                    invocation=invocation,
+                    exception=exception,
+                ):
+                    if invocation.id in waiting:
+                        continuation = waiting.pop(invocation.id)
+                        self.__bus.publish(
+                            InvocationThrew(
+                                invocation=invocation,
+                                exception=exception,
+                            )
+                        )
+                        self.__bus.publish_local(
+                            LocalInvocationThrew(
+                                invocation=continuation.invocation,
+                                generator=continuation.generator,
+                                exception=exception,
+                            )
+                        )
+                        self.__tasks.put(
+                            ThrowContinuation(
+                                invocation=continuation.invocation,
+                                generator=continuation.generator,
+                                exception=exception,
+                            )
+                        )
+                case LocalInvocationSuspended(
+                    invocation=invocation,
+                    generator=generator,
+                    suspension=suspension,
+                ):
+                    if not isinstance(suspension, InvocationSuspension):
+                        raise TypeError(
+                            f"Expected InvocationSuspension, got {type(suspension)}"
+                        )
+                    producer.submit(suspension.invocation)
+                    waiting[suspension.invocation.id] = Continuation(
+                        invocation=invocation,
+                        generator=generator,
+                    )
 
     def __run(self):
         """Run tasks from the queue until shutdown."""
@@ -233,13 +230,11 @@ class Worker:
     def __call__(self):
         continuer_started = Event()
         continuer_future = self.__executor.submit(
-            lambda: continuer(continuer_started, self.__bus, self.__tasks)
+            lambda: self.__continuer(continuer_started)
         )
         continuer_started.wait()
 
-        receive_future = self.__executor.submit(
-            lambda: receiver(self.__consumer, self.__tasks)
-        )
+        receive_future = self.__executor.submit(lambda: self.__receiver())
 
         futures = {
             "continuer": continuer_future,
