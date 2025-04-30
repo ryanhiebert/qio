@@ -1,8 +1,11 @@
+from collections.abc import Awaitable
 from concurrent.futures import FIRST_COMPLETED
 from concurrent.futures import wait
+from contextlib import suppress
 from queue import Queue
 from queue import ShutDown
 from threading import Event
+from threading import Thread
 
 from .bus import Bus
 from .consumer import Consumer
@@ -10,16 +13,19 @@ from .continuation import Continuation
 from .continuation import SendContinuation
 from .continuation import ThrowContinuation
 from .executor import Executor
+from .invocation import Invocation
 from .invocation import InvocationContinued
 from .invocation import InvocationErrored
+from .invocation import InvocationResumed
+from .invocation import InvocationStarted
 from .invocation import InvocationSucceeded
+from .invocation import InvocationSuspended
 from .invocation import InvocationSuspension
 from .invocation import InvocationThrew
 from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
 from .producer import Producer
-from .runner import Runner
 from .task import Task
 
 INVOCATION_QUEUE_NAME = "qio"
@@ -125,10 +131,104 @@ class Worker:
         self.__tasks = Queue[Task]()
         self.__consumer = Consumer(queue=INVOCATION_QUEUE_NAME, prefetch=concurrency)
         self.__executor = Executor(name="qio-worker")
-        self.__runners = [
-            Runner(self.__bus, self.__tasks, self.__consumer)
-            for _ in range(concurrency)
+        self.__threads = [
+            Thread(target=self.__run, daemon=False) for _ in range(concurrency)
         ]
+        for thread in self.__threads:
+            thread.start()
+
+    def __run(self):
+        """Run tasks from the queue until shutdown."""
+        while True:
+            try:
+                task = self.__tasks.get()
+            except ShutDown:
+                break
+
+            try:
+                self.__process_task(task)
+            finally:
+                self.__tasks.task_done()
+
+    def __process_task(self, task: Task):
+        """Process a single task from the queue."""
+        match task:
+            case delivery_tag, Invocation() as invocation:
+                self.__bus.publish(InvocationStarted(invocation=invocation))
+                try:
+                    result = invocation.run()
+                except Exception as exception:
+                    self.__bus.publish(
+                        InvocationErrored(invocation=invocation, exception=exception)
+                    )
+                else:
+                    if isinstance(result, Awaitable):
+                        generator = result.__await__()
+                        self.__bus.publish(
+                            InvocationContinued(invocation=invocation, value=None)
+                        )
+                        self.__bus.publish_local(
+                            LocalInvocationContinued(
+                                invocation=invocation,
+                                generator=generator,
+                                value=None,
+                            )
+                        )
+                        with suppress(ShutDown):
+                            self.__tasks.put(
+                                SendContinuation(
+                                    invocation=invocation,
+                                    generator=generator,
+                                    value=None,
+                                )
+                            )
+                    else:
+                        self.__bus.publish(
+                            InvocationSucceeded(invocation=invocation, value=result)
+                        )
+                finally:
+                    self.__consumer.ack(delivery_tag)
+
+            case (SendContinuation() | ThrowContinuation()) as continuation:
+                self.__bus.publish(
+                    InvocationResumed(invocation=continuation.invocation)
+                )
+                match continuation:
+                    case SendContinuation():
+                        method = continuation.send
+                    case ThrowContinuation():
+                        method = continuation.throw
+
+                try:
+                    suspension = method()
+                except StopIteration as stop:
+                    self.__bus.publish(
+                        InvocationSucceeded(
+                            invocation=continuation.invocation,
+                            value=stop.value,
+                        )
+                    )
+                except Exception as exception:
+                    self.__bus.publish(
+                        InvocationErrored(
+                            invocation=continuation.invocation,
+                            exception=exception,
+                        )
+                    )
+                else:
+                    self.__bus.publish(
+                        InvocationSuspended(
+                            invocation=continuation.invocation,
+                            suspension=suspension,
+                        )
+                    )
+                    self.__bus.publish_local(
+                        LocalInvocationSuspended(
+                            invocation=continuation.invocation,
+                            generator=continuation.generator,
+                            suspension=suspension,
+                        )
+                    )
 
     def __call__(self):
         continuer_started = Event()
@@ -158,25 +258,11 @@ class Worker:
         # In the future, we should not shutdown immediately, we should
         # shut the queue down, then quickly drain the queue and handle
         # those tasks gracefully by requeueing them or nacking them.
-        print("tasks shut down")
-        for runner in self.__runners:
-            print("joining runner")
-            runner.join()
-        print("all runners joined")
+        for thread in self.__threads:
+            thread.join()
 
     def shutdown(self):
-        print("shutting down worker")
-        # First shut down the tasks to stop new work from being processed
-        print("shutting down tasks...")
         self.__tasks.shutdown(immediate=True)
-
-        # Then shut down the bus to stop event processing
-        print("shutting down bus...")
         self.__bus.shutdown()
-
-        # Finally shut down the consumer and executor
-        print("shutting down consumer...")
         self.__consumer.shutdown()
-        print("shutting down executor...")
         self.__executor.shutdown(wait=True)
-        print("worker shutdown complete")
