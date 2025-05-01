@@ -56,16 +56,19 @@ class Worker:
         self.__continuer_started.wait()
         self.__receiver_thread.start()
 
-        futures = {
-            "continuer": self.__continuer_thread.future,
-            "receiver": self.__receiver_thread.future,
-        }
-
-        done, _ = wait(futures.values(), return_when=FIRST_COMPLETED)
+        done, _ = wait(
+            [self.__continuer_thread.future, self.__receiver_thread.future],
+            return_when=FIRST_COMPLETED,
+        )
         for future in done:
             future.result()
         print("Some actor finished unexpectedly.")
-        print(futures)
+        print(
+            {
+                "continuer": self.__continuer_thread.future,
+                "receiver": self.__receiver_thread.future,
+            }
+        )
 
     def __receiver(self):
         """Put messages from the consumer onto the queue.
