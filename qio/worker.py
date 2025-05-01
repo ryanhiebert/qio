@@ -35,8 +35,8 @@ class Worker:
         self.__bus = Bus()
         self.__tasks = Queue[Task]()
         self.__consumer = Consumer(queue=INVOCATION_QUEUE_NAME, prefetch=concurrency)
-        self.__threads = [
-            Thread(target=self.__run, daemon=False) for _ in range(concurrency)
+        self.__runner_threads = [
+            Thread(target=self.__runner, daemon=False) for _ in range(concurrency)
         ]
         self.__continuer_started = Event()
         self.__continuer_thread = Thread(
@@ -49,7 +49,7 @@ class Worker:
         )
 
     def __call__(self):
-        for thread in self.__threads:
+        for thread in self.__runner_threads:
             thread.start()
 
         self.__continuer_thread.start()
@@ -168,8 +168,13 @@ class Worker:
                         generator=generator,
                     )
 
-    def __run(self):
-        """Run tasks from the queue until shutdown."""
+    def __runner(self):
+        """Run tasks from the queue.
+
+        This actor pulls tasks from the queue and runs them, generating
+        the appropriate events on the bus to notify other actors of the
+        results.
+        """
         while True:
             try:
                 task = self.__tasks.get()
@@ -177,96 +182,99 @@ class Worker:
                 break
 
             try:
-                self.__process_task(task)
+                match task:
+                    case delivery_tag, Invocation() as invocation:
+                        self.__process_invocation(delivery_tag, invocation)
+                    case (SendContinuation() | ThrowContinuation()) as continuation:
+                        self.__process_continuation(continuation)
             finally:
                 self.__tasks.task_done()
 
-    def __process_task(self, task: Task):
-        """Process a single task from the queue."""
-        match task:
-            case delivery_tag, Invocation() as invocation:
-                self.__bus.publish(InvocationStarted(invocation=invocation))
-                try:
-                    result = invocation.run()
-                except Exception as exception:
-                    self.__bus.publish(
-                        InvocationErrored(invocation=invocation, exception=exception)
-                    )
-                else:
-                    if isinstance(result, Awaitable):
-                        generator = result.__await__()
-                        self.__bus.publish(
-                            InvocationContinued(invocation=invocation, value=None)
-                        )
-                        self.__bus.publish_local(
-                            LocalInvocationContinued(
-                                invocation=invocation,
-                                generator=generator,
-                                value=None,
-                            )
-                        )
-                        with suppress(ShutDown):
-                            self.__tasks.put(
-                                SendContinuation(
-                                    invocation=invocation,
-                                    generator=generator,
-                                    value=None,
-                                )
-                            )
-                    else:
-                        self.__bus.publish(
-                            InvocationSucceeded(invocation=invocation, value=result)
-                        )
-                finally:
-                    self.__consumer.ack(delivery_tag)
-
-            case (SendContinuation() | ThrowContinuation()) as continuation:
+    def __process_invocation(self, delivery_tag: int, invocation: Invocation):
+        """Process an invocation task."""
+        self.__bus.publish(InvocationStarted(invocation=invocation))
+        try:
+            result = invocation.run()
+        except Exception as exception:
+            self.__bus.publish(
+                InvocationErrored(invocation=invocation, exception=exception)
+            )
+        else:
+            if isinstance(result, Awaitable):
+                generator = result.__await__()
                 self.__bus.publish(
-                    InvocationResumed(invocation=continuation.invocation)
+                    InvocationContinued(invocation=invocation, value=None)
                 )
-                match continuation:
-                    case SendContinuation():
-                        method = continuation.send
-                    case ThrowContinuation():
-                        method = continuation.throw
+                self.__bus.publish_local(
+                    LocalInvocationContinued(
+                        invocation=invocation,
+                        generator=generator,
+                        value=None,
+                    )
+                )
+                with suppress(ShutDown):
+                    self.__tasks.put(
+                        SendContinuation(
+                            invocation=invocation,
+                            generator=generator,
+                            value=None,
+                        )
+                    )
+            else:
+                self.__bus.publish(
+                    InvocationSucceeded(invocation=invocation, value=result)
+                )
+        finally:
+            self.__consumer.ack(delivery_tag)
 
-                try:
-                    suspension = method()
-                except StopIteration as stop:
-                    self.__bus.publish(
-                        InvocationSucceeded(
-                            invocation=continuation.invocation,
-                            value=stop.value,
-                        )
-                    )
-                except Exception as exception:
-                    self.__bus.publish(
-                        InvocationErrored(
-                            invocation=continuation.invocation,
-                            exception=exception,
-                        )
-                    )
-                else:
-                    self.__bus.publish(
-                        InvocationSuspended(
-                            invocation=continuation.invocation,
-                            suspension=suspension,
-                        )
-                    )
-                    self.__bus.publish_local(
-                        LocalInvocationSuspended(
-                            invocation=continuation.invocation,
-                            generator=continuation.generator,
-                            suspension=suspension,
-                        )
-                    )
+    def __process_continuation(
+        self, continuation: SendContinuation | ThrowContinuation
+    ):
+        """Process a continuation task."""
+        self.__bus.publish(InvocationResumed(invocation=continuation.invocation))
+        match continuation:
+            case SendContinuation():
+                method = continuation.send
+            case ThrowContinuation():
+                method = continuation.throw
+
+        try:
+            suspension = method()
+        except StopIteration as stop:
+            self.__bus.publish(
+                InvocationSucceeded(
+                    invocation=continuation.invocation,
+                    value=stop.value,
+                )
+            )
+        except Exception as exception:
+            self.__bus.publish(
+                InvocationErrored(
+                    invocation=continuation.invocation,
+                    exception=exception,
+                )
+            )
+        else:
+            self.__bus.publish(
+                InvocationSuspended(
+                    invocation=continuation.invocation,
+                    suspension=suspension,
+                )
+            )
+            self.__bus.publish_local(
+                LocalInvocationSuspended(
+                    invocation=continuation.invocation,
+                    generator=continuation.generator,
+                    suspension=suspension,
+                )
+            )
 
     def stop(self):
         self.__tasks.shutdown(immediate=True)
         # In the future, we should not shutdown immediately, we should
         # shut the queue down, then quickly drain the queue and handle
         # those tasks gracefully by requeueing them or nacking them.
-        for thread in self.__threads:
+        for thread in self.__runner_threads:
             thread.join()
 
     def shutdown(self):
@@ -275,5 +283,5 @@ class Worker:
         self.__consumer.shutdown()
         self.__continuer_thread.join()
         self.__receiver_thread.join()
-        for thread in self.__threads:
+        for thread in self.__runner_threads:
             thread.join()
