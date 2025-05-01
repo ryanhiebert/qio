@@ -4,7 +4,6 @@ from concurrent.futures import wait
 from contextlib import suppress
 from queue import Queue
 from queue import ShutDown
-from threading import Event
 
 from .bus import Bus
 from .consumer import Consumer
@@ -35,11 +34,19 @@ class Worker:
         self.__bus = Bus()
         self.__tasks = Queue[Task]()
         self.__consumer = Consumer(queue=INVOCATION_QUEUE_NAME, prefetch=concurrency)
+        self.__continuer_events = self.__bus.subscribe(
+            {
+                InvocationErrored,
+                InvocationSucceeded,
+                LocalInvocationSuspended,
+            }
+        )
+
+        # Start threads event queues are created
         self.__runner_threads = [
             Thread(target=self.__runner, name=f"qio-runner-{i + 1}")
             for i in range(concurrency)
         ]
-        self.__continuer_started = Event()
         self.__continuer_thread = Thread(target=self.__continuer, name="qio-continuer")
         self.__receiver_thread = Thread(target=self.__receiver, name="qio-receiver")
 
@@ -69,7 +76,6 @@ class Worker:
         This actor is dedicated to reading the queue and keeping the
         consumer active.
         """
-        self.__continuer_started.wait()
         for message in self.__consumer:
             self.__tasks.put(message)
 
@@ -81,19 +87,11 @@ class Worker:
         task queue to be resumed.
         """
         producer = Producer()
-        events = self.__bus.subscribe(
-            {
-                InvocationErrored,
-                InvocationSucceeded,
-                LocalInvocationSuspended,
-            }
-        )
         waiting: dict[str, Continuation] = {}
-        self.__continuer_started.set()
 
         while True:
             try:
-                event = events.get()
+                event = self.__continuer_events.get()
             except ShutDown:
                 break
 
