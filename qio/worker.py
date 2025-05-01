@@ -36,24 +36,17 @@ class Worker:
         self.__tasks = Queue[Task]()
         self.__consumer = Consumer(queue=INVOCATION_QUEUE_NAME, prefetch=concurrency)
         self.__runner_threads = [
-            Thread(target=self.__runner) for _ in range(concurrency)
+            Thread(target=self.__runner, name=f"qio-runner-{i + 1}")
+            for i in range(concurrency)
         ]
         self.__continuer_started = Event()
-        self.__continuer_thread = Thread(
-            target=lambda: self.__continuer(self.__continuer_started),
-            name="qio-continuer",
-        )
-        self.__receiver_thread = Thread(
-            target=self.__receiver,
-            name="qio-receiver",
-        )
+        self.__continuer_thread = Thread(target=self.__continuer, name="qio-continuer")
+        self.__receiver_thread = Thread(target=self.__receiver, name="qio-receiver")
 
     def __call__(self):
         for thread in self.__runner_threads:
             thread.start()
-
         self.__continuer_thread.start()
-        self.__continuer_started.wait()
         self.__receiver_thread.start()
 
         done, _ = wait(
@@ -76,10 +69,11 @@ class Worker:
         This actor is dedicated to reading the queue and keeping the
         consumer active.
         """
+        self.__continuer_started.wait()
         for message in self.__consumer:
             self.__tasks.put(message)
 
-    def __continuer(self, started: Event):
+    def __continuer(self):
         """Continue suspended invocations.
 
         This actor watches for completed or errored invocations that are
@@ -95,7 +89,7 @@ class Worker:
             }
         )
         waiting: dict[str, Continuation] = {}
-        started.set()
+        self.__continuer_started.set()
 
         while True:
             try:
