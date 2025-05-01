@@ -36,7 +36,7 @@ class Worker:
         self.__tasks = Queue[Task]()
         self.__consumer = Consumer(queue=INVOCATION_QUEUE_NAME, prefetch=concurrency)
         self.__runner_threads = [
-            Thread(target=self.__runner, daemon=False) for _ in range(concurrency)
+            Thread(target=self.__runner) for _ in range(concurrency)
         ]
         self.__continuer_started = Event()
         self.__continuer_thread = Thread(
