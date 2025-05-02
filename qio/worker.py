@@ -179,13 +179,13 @@ class Worker:
             try:
                 match task:
                     case delivery_tag, Invocation() as invocation:
-                        self.__process_invocation(delivery_tag, invocation)
+                        self.__run_invocation(delivery_tag, invocation)
                     case (SendContinuation() | ThrowContinuation()) as continuation:
-                        self.__process_continuation(continuation)
+                        self.__run_continuation(continuation)
             finally:
                 self.__tasks.task_done()
 
-    def __process_invocation(self, delivery_tag: int, invocation: Invocation):
+    def __run_invocation(self, delivery_tag: int, invocation: Invocation):
         """Process an invocation task."""
         self.__bus.publish(InvocationStarted(invocation=invocation))
         try:
@@ -222,9 +222,7 @@ class Worker:
         finally:
             self.__consumer.ack(delivery_tag)
 
-    def __process_continuation(
-        self, continuation: SendContinuation | ThrowContinuation
-    ):
+    def __run_continuation(self, continuation: SendContinuation | ThrowContinuation):
         """Process a continuation task."""
         self.__bus.publish(InvocationResumed(invocation=continuation.invocation))
         match continuation:
