@@ -107,6 +107,7 @@ class InvocationSuspended(BaseInvocationSuspended): ...
 @dataclass(eq=False, kw_only=True, repr=False)
 class LocalInvocationSuspended(BaseInvocationSuspended):
     generator: Generator[Invocation, Any, Any]
+    delivery_tag: int
 
 
 @dataclass(eq=False, kw_only=True)
