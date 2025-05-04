@@ -30,6 +30,20 @@ class Bus:
             self.__subscriptions.setdefault(type, set()).add(queue)
         return queue
 
+    def unsubscribe(self, queue: Queue) -> None:
+        """Unsubscribe a queue from all event types."""
+        for type, subscriptions in list(self.__subscriptions.items()):
+            subscriptions.discard(queue)
+            if not subscriptions:
+                del self.__subscriptions[type]
+
+        # If there are no remaining subscriptions, shut down the listener
+        if not self.__subscriptions:
+            with self.__listener_lock:
+                if self.__listener is not None:
+                    self.__listener.shutdown()
+                    self.__listener = None
+
     def __distribute(self, event: Any):
         """Local-only distribution of events to subscribers."""
         subscribers = {

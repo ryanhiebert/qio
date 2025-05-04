@@ -5,11 +5,9 @@ from pika import BlockingConnection
 from typer import Typer
 
 from . import routine
-from .bus import Bus
 from .invocation import INVOCATION_QUEUE_NAME
-from .invocation import InvocationSubmitted
-from .producer import Producer
 from .worker import Worker
+from .qio import Qio
 
 
 @routine()
@@ -53,28 +51,25 @@ app = Typer()
 
 @app.command()
 def enqueue():
-    bus = Bus()
-    producer = Producer(bus=bus)
-    invocation = regular(0, 2)
-    bus.publish(InvocationSubmitted(invocation=invocation))
-    producer.enqueue(invocation)
-    invocation = irregular()
-    bus.publish(InvocationSubmitted(invocation=invocation))
-    producer.enqueue(invocation)
+    qio = Qio()
+    try:
+        qio.submit(regular(0, 2))
+        qio.submit(irregular())
+    finally:
+        qio.shutdown()
 
 
 @app.command()
 def monitor():
-    bus = Bus()
-    events = bus.subscribe({object})
-
+    qio = Qio()
+    events = qio.subscribe({object})
     try:
         while True:
             print(events.get())
     except KeyboardInterrupt:
         print("Shutting down gracefully.")
     finally:
-        bus.shutdown()
+        qio.shutdown()
 
 
 @app.command()
