@@ -6,7 +6,6 @@ from .bus import Bus
 from .invocation import INVOCATION_QUEUE_NAME
 from .invocation import Invocation
 from .invocation import InvocationEnqueued
-from .invocation import InvocationSubmitted
 from .invocation import serialize
 
 
@@ -15,10 +14,6 @@ class Producer:
         self.__bus = bus
         self.__channel_lock = Lock()
         self.__channel = BlockingConnection().channel()
-
-    def submit(self, invocation: Invocation):
-        self.__bus.publish(InvocationSubmitted(invocation=invocation))
-        self.enqueue(invocation)
 
     def enqueue(self, invocation: Invocation):
         with self.__channel_lock:

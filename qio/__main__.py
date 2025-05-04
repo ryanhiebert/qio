@@ -7,6 +7,7 @@ from typer import Typer
 from . import routine
 from .bus import Bus
 from .invocation import INVOCATION_QUEUE_NAME
+from .invocation import InvocationSubmitted
 from .producer import Producer
 from .worker import Worker
 
@@ -54,8 +55,12 @@ app = Typer()
 def enqueue():
     bus = Bus()
     producer = Producer(bus=bus)
-    producer.submit(regular(0, 2))
-    producer.submit(irregular())
+    invocation = regular(0, 2)
+    bus.publish(InvocationSubmitted(invocation=invocation))
+    producer.enqueue(invocation)
+    invocation = irregular()
+    bus.publish(InvocationSubmitted(invocation=invocation))
+    producer.enqueue(invocation)
 
 
 @app.command()

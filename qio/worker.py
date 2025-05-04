@@ -15,6 +15,7 @@ from .invocation import InvocationContinued
 from .invocation import InvocationErrored
 from .invocation import InvocationResumed
 from .invocation import InvocationStarted
+from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspended
 from .invocation import InvocationSuspension
@@ -168,7 +169,10 @@ class Worker:
                         raise TypeError(
                             f"Expected InvocationSuspension, got {type(suspension)}"
                         )
-                    producer.submit(suspension.invocation)
+                    self.__bus.publish(
+                        InvocationSubmitted(invocation=suspension.invocation)
+                    )
+                    producer.enqueue(suspension.invocation)
                     waiting[suspension.invocation.id] = (
                         delivery_tag,
                         Continuation(
