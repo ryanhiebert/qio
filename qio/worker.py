@@ -5,8 +5,8 @@ from contextlib import suppress
 from queue import Queue
 from queue import ShutDown
 
+from .broker import Broker
 from .bus import Bus
-from .consumer import Consumer
 from .continuation import Continuation
 from .continuation import SendContinuation
 from .continuation import ThrowContinuation
@@ -24,7 +24,6 @@ from .invocation import InvocationThrew
 from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
-from .producer import Producer
 from .task import Task
 from .thread import Thread
 
@@ -33,9 +32,12 @@ INVOCATION_QUEUE_NAME = "qio"
 
 class Worker:
     def __init__(self, *, concurrency: int):
+        self.__broker = Broker()
         self.__bus = Bus()
         self.__tasks = Queue[tuple[int, Task]]()
-        self.__consumer = Consumer(queue=INVOCATION_QUEUE_NAME, prefetch=concurrency)
+        self.__consumer = self.__broker.consumer(
+            queue=INVOCATION_QUEUE_NAME, prefetch=concurrency
+        )
         self.__continuer_events = self.__bus.subscribe(
             {
                 InvocationErrored,
@@ -90,7 +92,7 @@ class Worker:
         blocking suspended invocations, and sends their continuations to the
         task queue to be resumed.
         """
-        producer = Producer()
+        producer = self.__broker.producer
         waiting: dict[str, tuple[int, Continuation]] = {}
 
         while True:

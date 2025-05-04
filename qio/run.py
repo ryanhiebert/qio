@@ -1,19 +1,20 @@
 from collections.abc import Callable
 from typing import cast
 
+from .broker import Broker
 from .bus import Bus
 from .invocation import Invocation
 from .invocation import InvocationEnqueued
 from .invocation import InvocationErrored
 from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
-from .producer import Producer
 
 
 def run[R](invocation: Invocation[Callable[..., R]]) -> R:
     """Submit and wait for an invocation to complete."""
     bus = Bus()
-    producer = Producer()
+    broker = Broker()
+    producer = broker.producer
     completions = bus.subscribe({InvocationSucceeded, InvocationErrored})
     bus.publish(InvocationSubmitted(invocation=invocation))
     producer.enqueue(invocation)

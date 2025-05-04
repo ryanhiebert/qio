@@ -6,8 +6,8 @@ from typer import Typer
 
 from . import routine
 from .invocation import INVOCATION_QUEUE_NAME
-from .worker import Worker
 from .qio import Qio
+from .worker import Worker
 
 
 @routine()
