@@ -11,8 +11,8 @@ from .invocation import serialize
 
 
 class Producer:
-    def __init__(self):
-        self.__bus = Bus()
+    def __init__(self, *, bus: Bus):
+        self.__bus = bus
         self.__channel_lock = Lock()
         self.__channel = BlockingConnection().channel()
 

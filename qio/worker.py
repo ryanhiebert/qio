@@ -88,7 +88,7 @@ class Worker:
         blocking suspended invocations, and sends their continuations to the
         task queue to be resumed.
         """
-        producer = Producer()
+        producer = Producer(bus=self.__bus)
         waiting: dict[str, tuple[int, Continuation]] = {}
 
         while True:

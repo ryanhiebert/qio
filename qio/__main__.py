@@ -52,7 +52,8 @@ app = Typer()
 
 @app.command()
 def enqueue():
-    producer = Producer()
+    bus = Bus()
+    producer = Producer(bus=bus)
     producer.submit(regular(0, 2))
     producer.submit(irregular())
 

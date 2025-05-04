@@ -11,7 +11,7 @@ from .producer import Producer
 def run[R](invocation: Invocation[Callable[..., R]]) -> R:
     """Submit and wait for an invocation to complete."""
     bus = Bus()
-    producer = Producer()
+    producer = Producer(bus=bus)
     completions = bus.subscribe({InvocationSucceeded, InvocationErrored})
     producer.submit(invocation)
 
