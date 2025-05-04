@@ -12,6 +12,7 @@ from .continuation import SendContinuation
 from .continuation import ThrowContinuation
 from .invocation import Invocation
 from .invocation import InvocationContinued
+from .invocation import InvocationEnqueued
 from .invocation import InvocationErrored
 from .invocation import InvocationResumed
 from .invocation import InvocationStarted
@@ -89,7 +90,7 @@ class Worker:
         blocking suspended invocations, and sends their continuations to the
         task queue to be resumed.
         """
-        producer = Producer(bus=self.__bus)
+        producer = Producer()
         waiting: dict[str, tuple[int, Continuation]] = {}
 
         while True:
@@ -173,6 +174,7 @@ class Worker:
                         InvocationSubmitted(invocation=suspension.invocation)
                     )
                     producer.enqueue(suspension.invocation)
+                    self.__bus.publish(InvocationEnqueued(invocation=invocation))
                     waiting[suspension.invocation.id] = (
                         delivery_tag,
                         Continuation(

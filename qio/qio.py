@@ -7,6 +7,7 @@ from .bus import Bus
 from .consumer import Consumer
 from .invocation import INVOCATION_QUEUE_NAME
 from .invocation import Invocation
+from .invocation import InvocationEnqueued
 from .invocation import InvocationErrored
 from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
@@ -19,7 +20,7 @@ class Qio:
     def __init__(self):
         """Initialize the QIO interface."""
         self.__bus = Bus()
-        self.__producer = Producer(bus=self.__bus)
+        self.__producer = Producer()
         self.__consumer = Consumer(queue=INVOCATION_QUEUE_NAME, prefetch=3)
 
     def submit[R](self, invocation: Invocation[Callable[..., R]]) -> None:
@@ -29,6 +30,7 @@ class Qio:
         """
         self.__bus.publish(InvocationSubmitted(invocation=invocation))
         self.__producer.enqueue(invocation)
+        self.__bus.publish(InvocationEnqueued(invocation=invocation))
 
     def subscribe(self, types: Iterable[type]) -> Queue:
         """Subscribe to events on the bus."""

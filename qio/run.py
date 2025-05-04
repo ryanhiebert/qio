@@ -3,6 +3,7 @@ from typing import cast
 
 from .bus import Bus
 from .invocation import Invocation
+from .invocation import InvocationEnqueued
 from .invocation import InvocationErrored
 from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
@@ -12,10 +13,11 @@ from .producer import Producer
 def run[R](invocation: Invocation[Callable[..., R]]) -> R:
     """Submit and wait for an invocation to complete."""
     bus = Bus()
-    producer = Producer(bus=bus)
+    producer = Producer()
     completions = bus.subscribe({InvocationSucceeded, InvocationErrored})
     bus.publish(InvocationSubmitted(invocation=invocation))
     producer.enqueue(invocation)
+    bus.publish(InvocationEnqueued(invocation=invocation))
 
     try:
         while True:
