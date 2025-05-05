@@ -108,7 +108,7 @@ class Worker:
                         delivery_tag, continuation = waiting.pop(invocation.id)
                         self.__qio.bus.publish(
                             InvocationContinued(
-                                invocation=invocation,
+                                invocation=continuation.invocation,
                                 value=value,
                             )
                         )
@@ -138,7 +138,7 @@ class Worker:
                         delivery_tag, continuation = waiting.pop(invocation.id)
                         self.__qio.bus.publish(
                             InvocationThrew(
-                                invocation=invocation,
+                                invocation=continuation.invocation,
                                 exception=exception,
                             )
                         )

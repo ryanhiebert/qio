@@ -6,6 +6,7 @@ from typer import Typer
 
 from . import routine
 from .invocation import INVOCATION_QUEUE_NAME
+from .monitor import Monitor
 from .qio import Qio
 from .worker import Worker
 
@@ -60,16 +61,19 @@ def enqueue():
 
 
 @app.command()
-def monitor():
-    qio = Qio()
-    events = qio.bus.subscribe({object})
-    try:
-        while True:
-            print(events.get())
-    except KeyboardInterrupt:
-        print("Shutting down gracefully.")
-    finally:
-        qio.shutdown()
+def monitor(raw: bool = False):
+    if raw:
+        qio = Qio()
+        events = qio.bus.subscribe({object})
+        try:
+            while True:
+                print(events.get())
+        except KeyboardInterrupt:
+            print("Shutting down gracefully.")
+        finally:
+            qio.shutdown()
+    else:
+        Monitor().run()
 
 
 @app.command()
