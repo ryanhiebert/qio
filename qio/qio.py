@@ -3,15 +3,13 @@ from collections.abc import Iterable
 from queue import Queue
 from typing import cast
 
+from .broker import Broker
 from .bus import Bus
-from .consumer import Consumer
-from .invocation import INVOCATION_QUEUE_NAME
 from .invocation import Invocation
 from .invocation import InvocationEnqueued
 from .invocation import InvocationErrored
 from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
-from .producer import Producer
 
 
 class Qio:
@@ -20,8 +18,7 @@ class Qio:
     def __init__(self):
         """Initialize the QIO interface."""
         self.__bus = Bus()
-        self.__producer = Producer()
-        self.__consumer = Consumer(queue=INVOCATION_QUEUE_NAME, prefetch=3)
+        self.__broker = Broker()
 
     def submit[R](self, invocation: Invocation[Callable[..., R]]) -> None:
         """Submit an invocation to be processed.
@@ -29,7 +26,7 @@ class Qio:
         This publishes the submission event and enqueues the invocation.
         """
         self.__bus.publish(InvocationSubmitted(invocation=invocation))
-        self.__producer.enqueue(invocation)
+        self.__broker.producer.enqueue(invocation)
         self.__bus.publish(InvocationEnqueued(invocation=invocation))
 
     def subscribe(self, types: Iterable[type]) -> Queue:
@@ -58,4 +55,3 @@ class Qio:
     def shutdown(self) -> None:
         """Shutdown all components."""
         self.__bus.shutdown()
-        self.__consumer.shutdown()
