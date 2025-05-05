@@ -1,6 +1,4 @@
 from collections.abc import Callable
-from collections.abc import Iterable
-from queue import Queue
 from typing import cast
 
 from .broker import Broker
@@ -17,7 +15,7 @@ class Qio:
         self.bus = Bus()
         self.broker = Broker()
 
-    def submit[R](self, invocation: Invocation[Callable[..., R]]) -> None:
+    def submit[R](self, invocation: Invocation[Callable[..., R]]):
         """Submit an invocation to be processed.
 
         This publishes the submission event and enqueues the invocation.
@@ -25,10 +23,6 @@ class Qio:
         self.bus.publish(InvocationSubmitted(invocation=invocation))
         self.broker.producer.enqueue(invocation)
         self.bus.publish(InvocationEnqueued(invocation=invocation))
-
-    def subscribe(self, types: Iterable[type]) -> Queue:
-        """Subscribe to events on the bus."""
-        return self.bus.subscribe(types)
 
     def run[R](self, invocation: Invocation[Callable[..., R]]) -> R:
         """Run an invocation and wait for its completion."""
@@ -49,6 +43,6 @@ class Qio:
         finally:
             self.bus.unsubscribe(completions)
 
-    def shutdown(self) -> None:
-        """Shutdown all components."""
+    def shutdown(self):
+        """Shut down all components."""
         self.bus.shutdown()

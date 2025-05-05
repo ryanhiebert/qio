@@ -62,7 +62,7 @@ def enqueue():
 @app.command()
 def monitor():
     qio = Qio()
-    events = qio.subscribe({object})
+    events = qio.bus.subscribe({object})
     try:
         while True:
             print(events.get())
