@@ -5,8 +5,6 @@ from contextlib import suppress
 from queue import Queue
 from queue import ShutDown
 
-from .broker import Broker
-from .bus import Bus
 from .continuation import Continuation
 from .continuation import SendContinuation
 from .continuation import ThrowContinuation
@@ -24,6 +22,7 @@ from .invocation import InvocationThrew
 from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
+from .qio import Qio
 from .task import Task
 from .thread import Thread
 
@@ -32,13 +31,12 @@ INVOCATION_QUEUE_NAME = "qio"
 
 class Worker:
     def __init__(self, *, concurrency: int):
-        self.__broker = Broker()
-        self.__bus = Bus()
+        self.__qio = Qio()
         self.__tasks = Queue[tuple[int, Task]]()
-        self.__consumer = self.__broker.consumer(
+        self.__consumer = self.__qio.broker.consumer(
             queue=INVOCATION_QUEUE_NAME, prefetch=concurrency
         )
-        self.__continuer_events = self.__bus.subscribe(
+        self.__continuer_events = self.__qio.bus.subscribe(
             {
                 InvocationErrored,
                 InvocationSucceeded,
@@ -92,7 +90,7 @@ class Worker:
         blocking suspended invocations, and sends their continuations to the
         task queue to be resumed.
         """
-        producer = self.__broker.producer
+        producer = self.__qio.broker.producer
         waiting: dict[str, tuple[int, Continuation]] = {}
 
         while True:
@@ -108,13 +106,13 @@ class Worker:
                 ):
                     if invocation.id in waiting:
                         delivery_tag, continuation = waiting.pop(invocation.id)
-                        self.__bus.publish(
+                        self.__qio.bus.publish(
                             InvocationContinued(
                                 invocation=invocation,
                                 value=value,
                             )
                         )
-                        self.__bus.publish_local(
+                        self.__qio.bus.publish_local(
                             LocalInvocationContinued(
                                 invocation=continuation.invocation,
                                 generator=continuation.generator,
@@ -138,13 +136,13 @@ class Worker:
                 ):
                     if invocation.id in waiting:
                         delivery_tag, continuation = waiting.pop(invocation.id)
-                        self.__bus.publish(
+                        self.__qio.bus.publish(
                             InvocationThrew(
                                 invocation=invocation,
                                 exception=exception,
                             )
                         )
-                        self.__bus.publish_local(
+                        self.__qio.bus.publish_local(
                             LocalInvocationThrew(
                                 invocation=continuation.invocation,
                                 generator=continuation.generator,
@@ -172,11 +170,11 @@ class Worker:
                         raise TypeError(
                             f"Expected InvocationSuspension, got {type(suspension)}"
                         )
-                    self.__bus.publish(
+                    self.__qio.bus.publish(
                         InvocationSubmitted(invocation=suspension.invocation)
                     )
                     producer.enqueue(suspension.invocation)
-                    self.__bus.publish(InvocationEnqueued(invocation=invocation))
+                    self.__qio.bus.publish(InvocationEnqueued(invocation=invocation))
                     waiting[suspension.invocation.id] = (
                         delivery_tag,
                         Continuation(
@@ -209,21 +207,21 @@ class Worker:
 
     def __run_invocation(self, delivery_tag: int, invocation: Invocation):
         """Process an invocation task."""
-        self.__bus.publish(InvocationStarted(invocation=invocation))
+        self.__qio.bus.publish(InvocationStarted(invocation=invocation))
         try:
             result = invocation.run()
         except Exception as exception:
-            self.__bus.publish(
+            self.__qio.bus.publish(
                 InvocationErrored(invocation=invocation, exception=exception)
             )
             self.__consumer.ack(delivery_tag)
         else:
             if isinstance(result, Awaitable):
                 generator = result.__await__()
-                self.__bus.publish(
+                self.__qio.bus.publish(
                     InvocationContinued(invocation=invocation, value=None)
                 )
-                self.__bus.publish_local(
+                self.__qio.bus.publish_local(
                     LocalInvocationContinued(
                         invocation=invocation,
                         generator=generator,
@@ -243,7 +241,7 @@ class Worker:
                     )
                 self.__consumer.delay(delivery_tag)
             else:
-                self.__bus.publish(
+                self.__qio.bus.publish(
                     InvocationSucceeded(invocation=invocation, value=result)
                 )
                 self.__consumer.ack(delivery_tag)
@@ -252,7 +250,7 @@ class Worker:
         self, delivery_tag: int, continuation: SendContinuation | ThrowContinuation
     ):
         """Process a continuation task."""
-        self.__bus.publish(InvocationResumed(invocation=continuation.invocation))
+        self.__qio.bus.publish(InvocationResumed(invocation=continuation.invocation))
         match continuation:
             case SendContinuation():
                 method = continuation.send
@@ -262,7 +260,7 @@ class Worker:
         try:
             suspension = method()
         except StopIteration as stop:
-            self.__bus.publish(
+            self.__qio.bus.publish(
                 InvocationSucceeded(
                     invocation=continuation.invocation,
                     value=stop.value,
@@ -270,20 +268,20 @@ class Worker:
             )
             self.__consumer.ack(delivery_tag)
         except Exception as exception:
-            self.__bus.publish(
+            self.__qio.bus.publish(
                 InvocationErrored(
                     invocation=continuation.invocation,
                     exception=exception,
                 )
             )
         else:
-            self.__bus.publish(
+            self.__qio.bus.publish(
                 InvocationSuspended(
                     invocation=continuation.invocation,
                     suspension=suspension,
                 )
             )
-            self.__bus.publish_local(
+            self.__qio.bus.publish_local(
                 LocalInvocationSuspended(
                     invocation=continuation.invocation,
                     generator=continuation.generator,
@@ -299,7 +297,7 @@ class Worker:
 
     def shutdown(self):
         self.__tasks.shutdown(immediate=True)
-        self.__bus.shutdown()
+        self.__qio.bus.shutdown()
         self.__consumer.shutdown()
         self.__continuer_thread.join()
         self.__receiver_thread.join()
