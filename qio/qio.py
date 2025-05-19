@@ -19,7 +19,14 @@ class Qio:
 
         This publishes the submission event and enqueues the invocation.
         """
-        self.bus.publish(InvocationSubmitted(invocation=invocation))
+        self.bus.publish(
+            InvocationSubmitted(
+                invocation_id=invocation.id,
+                routine=invocation.routine,
+                args=invocation.args,
+                kwargs=invocation.kwargs,
+            )
+        )
         self.broker.producer.enqueue(invocation)
 
     def run[R](self, invocation: Invocation[Callable[..., R]]) -> R:
@@ -31,10 +38,10 @@ class Qio:
             while True:
                 match completions.get():
                     case InvocationSucceeded() as event:
-                        if event.invocation.id == invocation.id:
+                        if event.invocation_id == invocation.id:
                             return cast(R, event.value)
                     case InvocationErrored() as event:
-                        if event.invocation.id == invocation.id:
+                        if event.invocation_id == invocation.id:
                             raise event.exception
                     case _:
                         pass

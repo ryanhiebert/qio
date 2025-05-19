@@ -15,17 +15,24 @@ def run[R](invocation: Invocation[Callable[..., R]]) -> R:
     broker = Broker()
     producer = broker.producer
     completions = bus.subscribe({InvocationSucceeded, InvocationErrored})
-    bus.publish(InvocationSubmitted(invocation=invocation))
+    bus.publish(
+        InvocationSubmitted(
+            invocation_id=invocation.id,
+            routine=invocation.routine,
+            args=invocation.args,
+            kwargs=invocation.kwargs,
+        )
+    )
     producer.enqueue(invocation)
 
     try:
         while True:
             match completions.get():
                 case InvocationSucceeded() as event:
-                    if event.invocation.id == invocation.id:
+                    if event.invocation_id == invocation.id:
                         return cast(R, event.value)
                 case InvocationErrored() as event:
-                    if event.invocation.id == invocation.id:
+                    if event.invocation_id == invocation.id:
                         raise event.exception
                 case _:
                     pass

@@ -64,51 +64,51 @@ class Monitor(App):
         match event:
             case InvocationSubmitted():
                 table.add_row(
-                    event.invocation.id,
+                    event.invocation_id,
                     str(event.timestamp),
-                    event.invocation.routine.name,
+                    event.routine.name,
                     "Submitted",
-                    key=event.invocation.id,
+                    key=event.invocation_id,
                 )
             case InvocationStarted():
                 table.update_cell(
-                    event.invocation.id,
+                    event.invocation_id,
                     self.__column_keys[3],
                     "Started",
                 )
             case InvocationSuspended():
                 table.update_cell(
-                    event.invocation.id,
+                    event.invocation_id,
                     self.__column_keys[3],
                     "Suspended",
                 )
             case InvocationContinued():
                 table.update_cell(
-                    event.invocation.id,
+                    event.invocation_id,
                     self.__column_keys[3],
                     "Continued",
                 )
             case InvocationThrew():
                 table.update_cell(
-                    event.invocation.id,
+                    event.invocation_id,
                     self.__column_keys[3],
                     "Threw",
                 )
             case InvocationResumed():
                 table.update_cell(
-                    event.invocation.id,
+                    event.invocation_id,
                     self.__column_keys[3],
                     "Resumed",
                 )
             case InvocationSucceeded():
                 table.update_cell(
-                    event.invocation.id,
+                    event.invocation_id,
                     self.__column_keys[3],
                     "Succeeded",
                 )
             case InvocationErrored():
                 table.update_cell(
-                    event.invocation.id,
+                    event.invocation_id,
                     self.__column_keys[3],
                     "Errored",
                 )
