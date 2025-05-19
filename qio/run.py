@@ -4,7 +4,6 @@ from typing import cast
 from .broker import Broker
 from .bus import Bus
 from .invocation import Invocation
-from .invocation import InvocationEnqueued
 from .invocation import InvocationErrored
 from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
@@ -18,7 +17,6 @@ def run[R](invocation: Invocation[Callable[..., R]]) -> R:
     completions = bus.subscribe({InvocationSucceeded, InvocationErrored})
     bus.publish(InvocationSubmitted(invocation=invocation))
     producer.enqueue(invocation)
-    bus.publish(InvocationEnqueued(invocation=invocation))
 
     try:
         while True:

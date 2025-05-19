@@ -10,11 +10,9 @@ from .continuation import SendContinuation
 from .continuation import ThrowContinuation
 from .invocation import Invocation
 from .invocation import InvocationContinued
-from .invocation import InvocationEnqueued
 from .invocation import InvocationErrored
 from .invocation import InvocationResumed
 from .invocation import InvocationStarted
-from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspended
 from .invocation import InvocationSuspension
@@ -90,7 +88,6 @@ class Worker:
         blocking suspended invocations, and sends their continuations to the
         task queue to be resumed.
         """
-        producer = self.__qio.broker.producer
         waiting: dict[str, tuple[int, Continuation]] = {}
 
         while True:
@@ -170,11 +167,7 @@ class Worker:
                         raise TypeError(
                             f"Expected InvocationSuspension, got {type(suspension)}"
                         )
-                    self.__qio.bus.publish(
-                        InvocationSubmitted(invocation=suspension.invocation)
-                    )
-                    producer.enqueue(suspension.invocation)
-                    self.__qio.bus.publish(InvocationEnqueued(invocation=invocation))
+                    self.__qio.submit(suspension.invocation)
                     waiting[suspension.invocation.id] = (
                         delivery_tag,
                         Continuation(

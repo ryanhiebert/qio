@@ -4,7 +4,6 @@ from typing import cast
 from .broker import Broker
 from .bus import Bus
 from .invocation import Invocation
-from .invocation import InvocationEnqueued
 from .invocation import InvocationErrored
 from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
@@ -22,7 +21,6 @@ class Qio:
         """
         self.bus.publish(InvocationSubmitted(invocation=invocation))
         self.broker.producer.enqueue(invocation)
-        self.bus.publish(InvocationEnqueued(invocation=invocation))
 
     def run[R](self, invocation: Invocation[Callable[..., R]]) -> R:
         """Run an invocation and wait for its completion."""

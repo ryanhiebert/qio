@@ -7,7 +7,6 @@ from textual.widgets import Footer
 from textual.widgets import Header
 
 from .invocation import InvocationContinued
-from .invocation import InvocationEnqueued
 from .invocation import InvocationErrored
 from .invocation import InvocationResumed
 from .invocation import InvocationStarted
@@ -31,7 +30,6 @@ class Monitor(App):
         self.__events = self.__qio.bus.subscribe(
             {
                 InvocationSubmitted,
-                InvocationEnqueued,
                 InvocationStarted,
                 InvocationSuspended,
                 InvocationContinued,
@@ -54,7 +52,6 @@ class Monitor(App):
     def handle_invocation_event(
         self,
         event: InvocationSubmitted
-        | InvocationEnqueued
         | InvocationStarted
         | InvocationSuspended
         | InvocationContinued
@@ -72,12 +69,6 @@ class Monitor(App):
                     event.invocation.routine.name,
                     "Submitted",
                     key=event.invocation.id,
-                )
-            case InvocationEnqueued():
-                table.update_cell(
-                    event.invocation.id,
-                    self.__column_keys[3],
-                    "Enqueued",
                 )
             case InvocationStarted():
                 table.update_cell(
