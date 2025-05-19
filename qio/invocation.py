@@ -38,12 +38,13 @@ class Invocation[T: Callable[..., Any] = Callable[..., Any]]:
 
 @dataclass(eq=False, kw_only=True)
 class InvocationSuspension[T: Callable[..., Any] = Callable[..., Any]](Suspension):
-    """A suspension that contains an invocation."""
+    """A suspension that waits on an invocation to complete."""
 
+    id: str = field(default_factory=random_id)
     invocation: Invocation[T]
 
     def __repr__(self):
-        return f"<{type(self).__name__} {self.invocation!r}>"
+        return f"<{type(self).__name__} {self.id} {self.invocation!r}>"
 
 
 def serialize(invocation: Invocation, /) -> bytes:
