@@ -40,7 +40,6 @@ class Invocation[T: Callable[..., Any] = Callable[..., Any]]:
 class InvocationSuspension[T: Callable[..., Any] = Callable[..., Any]](Suspension):
     """A suspension that waits on an invocation to complete."""
 
-    id: str = field(default_factory=random_id)
     invocation: Invocation[T]
 
     def __repr__(self):
