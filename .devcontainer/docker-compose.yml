@@ -1,0 +1,10 @@
+services:
+  dev:
+    image: mcr.microsoft.com/devcontainers/python
+    volumes:
+      - ../..:/workspaces
+    command: sleep infinity
+  rabbitmq:
+    image: rabbitmq:management
+    ports:
+      - 15672:15672
