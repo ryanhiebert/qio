@@ -12,7 +12,7 @@ from .invocation import Invocation
 class Continuation[T: Callable[..., Any] = Callable[..., Any]]:
     id: str = field(default_factory=random_id)
     invocation_id: str
-    generator: Generator[Invocation[T], Any, Any]
+    generator: Generator[Invocation, Any, Any]
 
 
 @dataclass(eq=False, kw_only=True)

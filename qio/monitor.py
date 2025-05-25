@@ -65,7 +65,7 @@ class Monitor(App):
             case InvocationSubmitted():
                 table.add_row(
                     event.invocation_id,
-                    event.routine.name,
+                    event.routine,
                     "Submitted",
                     key=event.invocation_id,
                 )

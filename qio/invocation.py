@@ -17,14 +17,14 @@ INVOCATION_QUEUE_NAME = "qio"
 
 
 @dataclass(eq=False, kw_only=True)
-class Invocation[T: Callable[..., Any] = Callable[..., Any]]:
+class Invocation:
     id: str = field(default_factory=random_id)
-    routine: Routine[T]
+    routine: str
     args: tuple[Any]
     kwargs: dict[str, Any]
 
     def run(self) -> Any:
-        return self.routine.fn(*self.args, **self.kwargs)
+        return ROUTINE_REGISTRY[self.routine].fn(*self.args, **self.kwargs)
 
     def __await__(self) -> Any:
         return cast(Any, (yield InvocationSuspension(invocation=self)))
@@ -33,14 +33,14 @@ class Invocation[T: Callable[..., Any] = Callable[..., Any]]:
         params_repr = ", ".join(
             (*map(repr, self.args), *(f"{k}={v!r}" for k, v in self.kwargs.items())),
         )
-        return f"<{type(self).__name__} {self.id!r} {self.routine.name}({params_repr})>"
+        return f"<{type(self).__name__} {self.id!r} {self.routine}({params_repr})>"
 
 
 @dataclass(eq=False, kw_only=True)
 class InvocationSuspension[T: Callable[..., Any] = Callable[..., Any]](Suspension):
     """A suspension that waits on an invocation to complete."""
 
-    invocation: Invocation[T]
+    invocation: Invocation
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.id} {self.invocation!r}>"
@@ -53,7 +53,7 @@ def serialize(invocation: Invocation, /) -> bytes:
     return json.dumps(
         {
             "id": invocation.id,
-            "routine": invocation.routine.name,
+            "routine": invocation.routine,
             "args": invocation.args,
             "kwargs": invocation.kwargs,
         }
@@ -64,7 +64,7 @@ def deserialize(serialized: bytes, /) -> Invocation:
     data = json.loads(serialized.decode())
     return Invocation(
         id=data["id"],
-        routine=ROUTINE_REGISTRY[data["routine"]],
+        routine=data["routine"],
         args=data["args"],
         kwargs=data["kwargs"],
     )
@@ -82,7 +82,7 @@ class InvocationEvent:
 
 @dataclass(eq=False, kw_only=True, repr=False)
 class InvocationSubmitted(InvocationEvent):
-    routine: Routine[Callable[..., Any]]
+    routine: str
     args: tuple[Any]
     kwargs: dict[str, Any]
 
@@ -92,7 +92,7 @@ class InvocationSubmitted(InvocationEvent):
         )
         return (
             f"<{type(self).__name__} {self.invocation_id} "
-            f"{self.routine.name}({params_repr})>"
+            f"{self.routine}({params_repr})>"
         )
 
 

@@ -11,7 +11,7 @@ from .routine import Routine
 class CallableRoutine[T: Callable[..., Any] = Callable[..., Any]](Routine[T]):
     def __call__(self, *args: Any, **kwargs: Any) -> InvocationSuspension[T]:
         return InvocationSuspension(
-            invocation=Invocation(routine=self, args=args, kwargs=kwargs)
+            invocation=Invocation(routine=self.name, args=args, kwargs=kwargs)
         )
 
 
