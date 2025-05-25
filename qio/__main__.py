@@ -1,5 +1,5 @@
 from contextlib import suppress
-from time import sleep
+from time import sleep as time_sleep
 
 from pika import BlockingConnection
 from typer import Typer
@@ -8,6 +8,7 @@ from . import routine
 from .invocation import INVOCATION_QUEUE_NAME
 from .monitor import Monitor
 from .qio import Qio
+from .sleep import sleep
 from .worker import Worker
 
 
@@ -15,7 +16,7 @@ from .worker import Worker
 def regular(instance: int, iterations: int):
     for i in range(iterations):
         print(f"Iteration {instance} {i} started")
-        sleep(1)
+        time_sleep(1)
     print(f"Instance {instance} completed")
     return f"Instance {instance} completed"
 
@@ -42,8 +43,10 @@ async def abstract(instance: int, iterations: int):
 async def irregular():
     await regular(1, 2)
     print("irregular sleep started")
-    sleep(1)
-    print("irregular sleep ended")
+    time_sleep(1)
+    print("irregular sleep ended. Starting qio sleep.")
+    await sleep(4)
+    print("qio sleep ended")
     return await abstract(2, 5)
 
 

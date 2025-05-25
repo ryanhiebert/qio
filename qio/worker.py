@@ -2,8 +2,10 @@ from collections.abc import Awaitable
 from concurrent.futures import FIRST_COMPLETED
 from concurrent.futures import wait
 from contextlib import suppress
+from functools import partial
 from queue import Queue
 from queue import ShutDown
+from threading import Timer
 
 from .continuation import Continuation
 from .continuation import SendContinuation
@@ -21,6 +23,7 @@ from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
 from .qio import Qio
+from .sleep import SleepSuspension
 from .task import Task
 from .thread import Thread
 
@@ -49,6 +52,7 @@ class Worker:
         ]
         self.__continuer_thread = Thread(target=self.__continuer, name="qio-continuer")
         self.__receiver_thread = Thread(target=self.__receiver, name="qio-receiver")
+        self.__timers: dict[str, Timer] = {}
 
     def __call__(self):
         for thread in self.__runner_threads:
@@ -163,18 +167,46 @@ class Worker:
                     suspension=suspension,
                     delivery_tag=delivery_tag,
                 ):
-                    if not isinstance(suspension, InvocationSuspension):
-                        raise TypeError(
-                            f"Expected InvocationSuspension, got {type(suspension)}"
-                        )
-                    self.__qio.submit(suspension)
-                    waiting[suspension.invocation.id] = (
-                        delivery_tag,
-                        Continuation(
-                            invocation_id=invocation_id,
-                            generator=generator,
-                        ),
-                    )
+                    match suspension:
+                        case SleepSuspension():
+
+                            def resume(
+                                suspension_id,
+                                task: tuple[int, SendContinuation],
+                            ):
+                                self.__timers.pop(suspension_id)
+                                with suppress(ShutDown):
+                                    self.__tasks.put(task)
+
+                            self.__timers[suspension.id] = Timer(
+                                suspension.interval,
+                                partial(
+                                    resume,
+                                    suspension.id,
+                                    (
+                                        delivery_tag,
+                                        SendContinuation(
+                                            invocation_id=invocation_id,
+                                            generator=generator,
+                                            value=None,
+                                        ),
+                                    ),
+                                ),
+                            )
+                            self.__timers[suspension.id].start()
+                        case InvocationSuspension():
+                            self.__qio.submit(suspension)
+                            waiting[suspension.invocation.id] = (
+                                delivery_tag,
+                                Continuation(
+                                    invocation_id=invocation_id,
+                                    generator=generator,
+                                ),
+                            )
+                        case _:
+                            raise ValueError(
+                                f"Unexpected suspension type: {type(suspension)}"
+                            )
 
     def __runner(self):
         """Run tasks from the queue.
@@ -287,11 +319,15 @@ class Worker:
 
     def stop(self):
         self.__tasks.shutdown(immediate=True)
+        for timer in self.__timers.values():
+            timer.cancel()
         for thread in self.__runner_threads:
             thread.join()
 
     def shutdown(self):
         self.__tasks.shutdown(immediate=True)
+        for timer in self.__timers.values():
+            timer.cancel()
         self.__qio.bus.shutdown()
         self.__consumer.shutdown()
         self.__continuer_thread.join()
