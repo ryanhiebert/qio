@@ -45,6 +45,9 @@ class InvocationSuspension[T: Callable[..., Any] = Callable[..., Any]](Suspensio
     def __repr__(self):
         return f"<{type(self).__name__} {self.id} {self.invocation!r}>"
 
+    def __await__(self) -> Any:
+        return cast(Any, (yield self))
+
 
 def serialize(invocation: Invocation, /) -> bytes:
     return json.dumps(

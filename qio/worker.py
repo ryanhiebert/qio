@@ -167,7 +167,7 @@ class Worker:
                         raise TypeError(
                             f"Expected InvocationSuspension, got {type(suspension)}"
                         )
-                    self.__qio.submit(suspension.invocation)
+                    self.__qio.submit(suspension)
                     waiting[suspension.invocation.id] = (
                         delivery_tag,
                         Continuation(
