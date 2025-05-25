@@ -102,7 +102,7 @@ class InvocationStarted(InvocationEvent): ...
 
 @dataclass(eq=False, kw_only=True)
 class BaseInvocationSuspended(InvocationEvent):
-    suspension: Invocation
+    suspension: InvocationSuspension
 
     def __repr__(self):
         return (

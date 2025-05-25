@@ -279,8 +279,8 @@ class Worker:
             self.__qio.bus.publish_local(
                 LocalInvocationSuspended(
                     invocation_id=continuation.invocation_id,
-                    generator=continuation.generator,
                     suspension=suspension,
+                    generator=continuation.generator,
                     delivery_tag=delivery_tag,
                 )
             )
