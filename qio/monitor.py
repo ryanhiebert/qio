@@ -65,7 +65,6 @@ class Monitor(App):
             case InvocationSubmitted():
                 table.add_row(
                     event.invocation_id,
-                    str(event.timestamp),
                     event.routine.name,
                     "Submitted",
                     key=event.invocation_id,
@@ -73,43 +72,43 @@ class Monitor(App):
             case InvocationStarted():
                 table.update_cell(
                     event.invocation_id,
-                    self.__column_keys[3],
+                    self.__column_keys[2],
                     "Started",
                 )
             case InvocationSuspended():
                 table.update_cell(
                     event.invocation_id,
-                    self.__column_keys[3],
+                    self.__column_keys[2],
                     "Suspended",
                 )
             case InvocationContinued():
                 table.update_cell(
                     event.invocation_id,
-                    self.__column_keys[3],
+                    self.__column_keys[2],
                     "Continued",
                 )
             case InvocationThrew():
                 table.update_cell(
                     event.invocation_id,
-                    self.__column_keys[3],
+                    self.__column_keys[2],
                     "Threw",
                 )
             case InvocationResumed():
                 table.update_cell(
                     event.invocation_id,
-                    self.__column_keys[3],
+                    self.__column_keys[2],
                     "Resumed",
                 )
             case InvocationSucceeded():
                 table.update_cell(
                     event.invocation_id,
-                    self.__column_keys[3],
+                    self.__column_keys[2],
                     "Succeeded",
                 )
             case InvocationErrored():
                 table.update_cell(
                     event.invocation_id,
-                    self.__column_keys[3],
+                    self.__column_keys[2],
                     "Errored",
                 )
 
@@ -120,7 +119,7 @@ class Monitor(App):
 
     def on_mount(self):
         table = self.query_one(DataTable)
-        self.__column_keys = table.add_columns("ID", "Time", "Name", "Status")
+        self.__column_keys = table.add_columns("ID", "Name", "Status")
         self.__thread.start()
 
     def on_unmount(self) -> None:
