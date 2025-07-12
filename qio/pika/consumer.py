@@ -5,8 +5,8 @@ from typing import cast
 
 from pika import BlockingConnection
 
-from .invocation import Invocation
-from .invocation import deserialize
+from ..invocation import Invocation
+from ..invocation import deserialize
 
 
 class Consumer:

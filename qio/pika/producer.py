@@ -2,9 +2,9 @@ from threading import Lock
 
 from pika import BlockingConnection
 
-from .invocation import INVOCATION_QUEUE_NAME
-from .invocation import Invocation
-from .invocation import serialize
+from ..invocation import INVOCATION_QUEUE_NAME
+from ..invocation import Invocation
+from ..invocation import serialize
 
 
 class Producer:

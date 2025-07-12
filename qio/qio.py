@@ -1,12 +1,12 @@
 from collections.abc import Callable
 from typing import cast
 
-from .broker import Broker
-from .bus import Bus
 from .invocation import InvocationErrored
 from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspension
+from .pika.broker import Broker
+from .pika.bus import Bus
 
 
 class Qio:
