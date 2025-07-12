@@ -1,17 +1,18 @@
 from collections.abc import Callable
 from typing import cast
 
+from .bus import Bus
 from .invocation import InvocationErrored
 from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspension
 from .pika.broker import Broker
-from .pika.bus import Bus
+from .pika.bus import PikaBusTransport
 
 
 class Qio:
     def __init__(self):
-        self.bus = Bus()
+        self.bus = Bus(PikaBusTransport())
         self.broker = Broker()
 
     def submit[R](self, suspension: InvocationSuspension):
