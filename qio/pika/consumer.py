@@ -5,9 +5,6 @@ from typing import cast
 
 from pika import BlockingConnection
 
-from ..invocation import Invocation
-from ..invocation import deserialize
-
 
 class Consumer:
     """Consume from the RabbitMQ queue."""
@@ -25,9 +22,9 @@ class Consumer:
     def __iter__(self):
         return self
 
-    def __next__(self) -> tuple[int, Invocation]:
+    def __next__(self) -> tuple[int, bytes]:
         method, _, body = next(self.__iterator)
-        return cast(int, method.delivery_tag), deserialize(body)
+        return cast(int, method.delivery_tag), body
 
     def __blocking_callback(self, fn: Callable[[], Any]):
         """Queue a callback and block until it is executed."""
@@ -48,6 +45,19 @@ class Consumer:
         """Report that a message is delayed, and add more capacity."""
         with self.__qos_lock:
             self.__qos_delayed.add(delivery_tag)
+            self.__blocking_callback(
+                lambda: self.__channel.basic_qos(
+                    prefetch_count=self.__qos_prefetch + len(self.__qos_delayed)
+                )
+            )
+
+    def undelay(self, delivery_tag: int, /):
+        """Report that a delayed message has been resumed.
+
+        Remove the additional capacity previously added.
+        """
+        with self.__qos_lock:
+            self.__qos_delayed.remove(delivery_tag)
             self.__blocking_callback(
                 lambda: self.__channel.basic_qos(
                     prefetch_count=self.__qos_prefetch + len(self.__qos_delayed)

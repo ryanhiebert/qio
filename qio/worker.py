@@ -22,21 +22,23 @@ from .invocation import InvocationThrew
 from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
+from .invocation import deserialize
+from .message import Message
 from .qio import Qio
 from .sleep import SleepSuspension
-from .task import Task
 from .thread import Thread
 
 INVOCATION_QUEUE_NAME = "qio"
 
 
+Task = Invocation | SendContinuation | ThrowContinuation
+
+
 class Worker:
     def __init__(self, *, concurrency: int):
         self.__qio = Qio()
-        self.__tasks = Queue[tuple[int, Task]]()
-        self.__consumer = self.__qio.broker.consumer(
-            queue=INVOCATION_QUEUE_NAME, prefetch=concurrency
-        )
+        self.__tasks = Queue[tuple[Message, Task]]()
+        self.__consumer = self.__qio.broker.consume(prefetch=concurrency)
         self.__continuer_events = self.__qio.bus.subscribe(
             {
                 InvocationErrored,
@@ -83,7 +85,7 @@ class Worker:
         """
         for message in self.__consumer:
             with suppress(ShutDown):
-                self.__tasks.put(message)
+                self.__tasks.put((message, deserialize(message.body)))
 
     def __continuer(self):
         """Continue suspended invocations.
@@ -92,7 +94,7 @@ class Worker:
         blocking suspended invocations, and sends their continuations to the
         task queue to be resumed.
         """
-        waiting: dict[str, tuple[int, Continuation]] = {}
+        waiting: dict[str, tuple[Message, Continuation]] = {}
 
         while True:
             try:
@@ -106,7 +108,7 @@ class Worker:
                     value=value,
                 ):
                     if invocation_id in waiting:
-                        delivery_tag, continuation = waiting.pop(invocation_id)
+                        message, continuation = waiting.pop(invocation_id)
                         self.__qio.bus.publish(
                             InvocationContinued(
                                 invocation_id=continuation.invocation_id,
@@ -123,7 +125,7 @@ class Worker:
                         with suppress(ShutDown):
                             self.__tasks.put(
                                 (
-                                    delivery_tag,
+                                    message,
                                     SendContinuation(
                                         invocation_id=continuation.invocation_id,
                                         generator=continuation.generator,
@@ -136,7 +138,7 @@ class Worker:
                     exception=exception,
                 ):
                     if invocation_id in waiting:
-                        delivery_tag, continuation = waiting.pop(invocation_id)
+                        message, continuation = waiting.pop(invocation_id)
                         self.__qio.bus.publish(
                             InvocationThrew(
                                 invocation_id=continuation.invocation_id,
@@ -153,7 +155,7 @@ class Worker:
                         with suppress(ShutDown):
                             self.__tasks.put(
                                 (
-                                    delivery_tag,
+                                    message,
                                     ThrowContinuation(
                                         invocation_id=continuation.invocation_id,
                                         generator=continuation.generator,
@@ -165,31 +167,30 @@ class Worker:
                     invocation_id=invocation_id,
                     generator=generator,
                     suspension=suspension,
-                    delivery_tag=delivery_tag,
+                    message=message,
                 ):
                     match suspension:
                         case SleepSuspension():
 
                             def resume(
                                 suspension_id,
-                                task: tuple[int, SendContinuation],
+                                message: Message,
+                                task: SendContinuation,
                             ):
                                 self.__timers.pop(suspension_id)
                                 with suppress(ShutDown):
-                                    self.__tasks.put(task)
+                                    self.__tasks.put((message, task))
 
                             self.__timers[suspension.id] = Timer(
                                 suspension.interval,
                                 partial(
                                     resume,
                                     suspension.id,
-                                    (
-                                        delivery_tag,
-                                        SendContinuation(
-                                            invocation_id=invocation_id,
-                                            generator=generator,
-                                            value=None,
-                                        ),
+                                    message,
+                                    SendContinuation(
+                                        invocation_id=invocation_id,
+                                        generator=generator,
+                                        value=None,
                                     ),
                                 ),
                             )
@@ -197,7 +198,7 @@ class Worker:
                         case InvocationSuspension():
                             self.__qio.submit(suspension)
                             waiting[suspension.invocation.id] = (
-                                delivery_tag,
+                                message,
                                 Continuation(
                                     invocation_id=invocation_id,
                                     generator=generator,
@@ -217,21 +218,22 @@ class Worker:
         """
         while True:
             try:
-                delivery_tag, task = self.__tasks.get()
+                message, task = self.__tasks.get()
             except ShutDown:
                 break
 
             try:
                 match task:
                     case Invocation() as invocation:
-                        self.__run_invocation(delivery_tag, invocation)
+                        self.__run_invocation(message, invocation)
                     case SendContinuation() | ThrowContinuation() as continuation:
-                        self.__run_continuation(delivery_tag, continuation)
+                        self.__run_continuation(message, continuation)
             finally:
                 self.__tasks.task_done()
 
-    def __run_invocation(self, delivery_tag: int, invocation: Invocation):
+    def __run_invocation(self, message: Message, invocation: Invocation):
         """Process an invocation task."""
+        self.__qio.broker.start(message)
         self.__qio.bus.publish(InvocationStarted(invocation_id=invocation.id))
         try:
             result = invocation.run()
@@ -239,7 +241,7 @@ class Worker:
             self.__qio.bus.publish(
                 InvocationErrored(invocation_id=invocation.id, exception=exception)
             )
-            self.__consumer.ack(delivery_tag)
+            self.__qio.broker.complete(message)
         else:
             if isinstance(result, Awaitable):
                 generator = result.__await__()
@@ -256,7 +258,7 @@ class Worker:
                 with suppress(ShutDown):
                     self.__tasks.put(
                         (
-                            delivery_tag,
+                            message,
                             SendContinuation(
                                 invocation_id=invocation.id,
                                 generator=generator,
@@ -264,17 +266,18 @@ class Worker:
                             ),
                         )
                     )
-                self.__consumer.delay(delivery_tag)
+                self.__qio.broker.suspend(message)
             else:
                 self.__qio.bus.publish(
                     InvocationSucceeded(invocation_id=invocation.id, value=result)
                 )
-                self.__consumer.ack(delivery_tag)
+                self.__qio.broker.complete(message)
 
     def __run_continuation(
-        self, delivery_tag: int, continuation: SendContinuation | ThrowContinuation
+        self, message: Message, continuation: SendContinuation | ThrowContinuation
     ):
         """Process a continuation task."""
+        self.__qio.broker.resume(message)
         self.__qio.bus.publish(
             InvocationResumed(invocation_id=continuation.invocation_id)
         )
@@ -293,7 +296,7 @@ class Worker:
                     value=stop.value,
                 )
             )
-            self.__consumer.ack(delivery_tag)
+            self.__qio.broker.complete(message)
         except Exception as exception:
             self.__qio.bus.publish(
                 InvocationErrored(
@@ -301,6 +304,7 @@ class Worker:
                     exception=exception,
                 )
             )
+            self.__qio.broker.complete(message)
         else:
             self.__qio.bus.publish(
                 InvocationSuspended(
@@ -313,9 +317,10 @@ class Worker:
                     invocation_id=continuation.invocation_id,
                     suspension=suspension,
                     generator=continuation.generator,
-                    delivery_tag=delivery_tag,
+                    message=message,
                 )
             )
+            self.__qio.broker.suspend(message)
 
     def stop(self):
         self.__tasks.shutdown(immediate=True)
@@ -328,8 +333,7 @@ class Worker:
         self.__tasks.shutdown(immediate=True)
         for timer in self.__timers.values():
             timer.cancel()
-        self.__qio.bus.shutdown()
-        self.__consumer.shutdown()
+        self.__qio.shutdown()
         self.__continuer_thread.join()
         self.__receiver_thread.join()
         for thread in self.__runner_threads:

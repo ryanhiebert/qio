@@ -6,6 +6,7 @@ from .invocation import InvocationErrored
 from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspension
+from .invocation import serialize
 from .pika.broker import Broker
 from .pika.bus import PikaBusTransport
 
@@ -15,7 +16,7 @@ class Qio:
         self.bus = Bus(PikaBusTransport())
         self.broker = Broker()
 
-    def submit[R](self, suspension: InvocationSuspension):
+    def submit(self, suspension: InvocationSuspension):
         """Submit an InvocationSuspension to be processed.
 
         This publishes the submission event and enqueues the invocation.
@@ -28,7 +29,7 @@ class Qio:
                 kwargs=suspension.invocation.kwargs,
             )
         )
-        self.broker.producer.enqueue(suspension.invocation)
+        self.broker.enqueue(serialize(suspension.invocation))
 
     def run[R](self, suspension: InvocationSuspension[Callable[..., R]]) -> R:
         """Run an invocation and wait for its completion."""
@@ -44,11 +45,10 @@ class Qio:
                     case InvocationErrored() as event:
                         if event.invocation_id == suspension.invocation.id:
                             raise event.exception
-                    case _:
-                        pass
         finally:
             self.bus.unsubscribe(completions)
 
     def shutdown(self):
         """Shut down all components."""
+        self.broker.shutdown()
         self.bus.shutdown()

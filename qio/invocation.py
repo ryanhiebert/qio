@@ -9,6 +9,7 @@ from typing import Any
 from typing import cast
 
 from .id import random_id
+from .message import Message
 from .registry import ROUTINE_REGISTRY
 from .suspension import Suspension
 
@@ -66,7 +67,7 @@ def deserialize(serialized: bytes, /) -> Invocation:
     )
 
 
-@dataclass(eq=True, kw_only=True)
+@dataclass(eq=False, kw_only=True)
 class InvocationEvent:
     id: str = field(default_factory=random_id)
     timestamp: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
@@ -98,7 +99,7 @@ class InvocationStarted(InvocationEvent): ...
 
 @dataclass(eq=False, kw_only=True)
 class BaseInvocationSuspended(InvocationEvent):
-    suspension: InvocationSuspension
+    suspension: Suspension
 
     def __repr__(self):
         return (
@@ -114,7 +115,7 @@ class InvocationSuspended(BaseInvocationSuspended): ...
 @dataclass(eq=False, kw_only=True, repr=False)
 class LocalInvocationSuspended(BaseInvocationSuspended):
     generator: Generator[Invocation, Any, Any]
-    delivery_tag: int
+    message: Message
 
 
 @dataclass(eq=False, kw_only=True)
