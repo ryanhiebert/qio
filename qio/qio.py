@@ -7,14 +7,14 @@ from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspension
 from .invocation import serialize
-from .pika.broker import Broker
+from .pika.broker import PikaBroker
 from .pika.bus import PikaBusTransport
 
 
 class Qio:
     def __init__(self):
         self.bus = Bus(PikaBusTransport())
-        self.broker = Broker()
+        self.broker = PikaBroker()
 
     def submit(self, suspension: InvocationSuspension):
         """Submit an InvocationSuspension to be processed.

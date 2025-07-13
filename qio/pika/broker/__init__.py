@@ -3,14 +3,15 @@ from threading import Lock
 
 from pika import BlockingConnection
 
-from qio.message import Message
+from qio.broker import Broker
+from qio.broker import Message
 
 from .consumer import Consumer
 
 QUEUE_NAME = "qio"
 
 
-class Broker:
+class PikaBroker(Broker):
     """A broker enables producing and consuming messages on a queue."""
 
     def __init__(self):

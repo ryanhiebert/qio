@@ -8,8 +8,8 @@ from datetime import datetime
 from typing import Any
 from typing import cast
 
+from .broker import Message
 from .id import random_id
-from .message import Message
 from .registry import ROUTINE_REGISTRY
 from .suspension import Suspension
 

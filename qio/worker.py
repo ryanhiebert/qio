@@ -7,6 +7,7 @@ from queue import Queue
 from queue import ShutDown
 from threading import Timer
 
+from .broker import Message
 from .continuation import Continuation
 from .continuation import SendContinuation
 from .continuation import ThrowContinuation
@@ -23,7 +24,6 @@ from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
 from .invocation import deserialize
-from .message import Message
 from .qio import Qio
 from .sleep import SleepSuspension
 from .thread import Thread
