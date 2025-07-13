@@ -41,42 +41,11 @@ class Consumer:
         with lock:
             return
 
-    def delay(self, delivery_tag: int, /):
-        """Report that a message is delayed, and add more capacity."""
-        with self.__qos_lock:
-            self.__qos_delayed.add(delivery_tag)
-            self.__blocking_callback(
-                lambda: self.__channel.basic_qos(
-                    prefetch_count=self.__qos_prefetch + len(self.__qos_delayed)
-                )
-            )
-
-    def undelay(self, delivery_tag: int, /):
-        """Report that a delayed message has been resumed.
-
-        Remove the additional capacity previously added.
-        """
-        with self.__qos_lock:
-            self.__qos_delayed.remove(delivery_tag)
-            self.__blocking_callback(
-                lambda: self.__channel.basic_qos(
-                    prefetch_count=self.__qos_prefetch + len(self.__qos_delayed)
-                )
-            )
-
     def ack(self, delivery_tag: int, /):
         """Report that a message is fully completed.
 
         If the message was previously delayed, remove the additional capacity.
         """
-        if delivery_tag in self.__qos_delayed:
-            with self.__qos_lock:
-                self.__qos_delayed.remove(delivery_tag)
-                self.__blocking_callback(
-                    lambda: self.__channel.basic_qos(
-                        prefetch_count=self.__qos_prefetch + len(self.__qos_delayed)
-                    )
-                )
         self.__blocking_callback(lambda: self.__ack(delivery_tag=delivery_tag))
 
     def shutdown(self):
