@@ -1,7 +1,4 @@
-from abc import ABC
-from abc import abstractmethod
 from collections.abc import Iterable
-from collections.abc import Iterator
 from itertools import chain
 from queue import Queue
 from threading import Thread
@@ -9,23 +6,11 @@ from typing import Any
 
 import dill
 
-
-class BusTransport(ABC):
-    @abstractmethod
-    def subscribe(self) -> Iterator[bytes]:
-        raise NotImplementedError("Subclasses must implement this method.")
-
-    @abstractmethod
-    def publish(self, message: bytes):
-        raise NotImplementedError("Subclasses must implement this method.")
-
-    @abstractmethod
-    def shutdown(self):
-        raise NotImplementedError("Subclasses must implement this method.")
+from .transport import Transport
 
 
 class Bus:
-    def __init__(self, transport: BusTransport):
+    def __init__(self, transport: Transport):
         self.__transport = transport
         self.__subscriptions: dict[type, set[Queue[Any]]] = {}
         self.__listener = Thread(target=self.__listen, name="qio-bus-listener")

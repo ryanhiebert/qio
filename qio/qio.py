@@ -8,12 +8,12 @@ from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspension
 from .invocation import serialize
 from .pika.broker import PikaBroker
-from .pika.bus import PikaBusTransport
+from .pika.transport import PikaTransport
 
 
 class Qio:
     def __init__(self):
-        self.bus = Bus(PikaBusTransport())
+        self.bus = Bus(PikaTransport())
         self.broker = PikaBroker()
 
     def submit(self, suspension: InvocationSuspension):

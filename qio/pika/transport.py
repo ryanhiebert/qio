@@ -7,10 +7,10 @@ from typing import cast
 
 from pika import BlockingConnection
 
-from qio.bus import BusTransport
+from qio.transport import Transport
 
 
-class PikaBusTransport(BusTransport):
+class PikaTransport(Transport):
     def __init__(self):
         self.__subscriber = Queue[bytes]()
         self.__subscribe_connection = BlockingConnection()
