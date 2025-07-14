@@ -1,4 +1,6 @@
 from collections.abc import Callable
+from collections.abc import Iterable
+from queue import Queue
 from typing import cast
 
 from .bus import Bus
@@ -15,6 +17,12 @@ class Qio:
     def __init__(self):
         self.bus = Bus(PikaTransport())
         self.broker = PikaBroker()
+
+    def subscribe[T](self, types: Iterable[type[T]]) -> Queue[T]:
+        return self.bus.subscribe(types)
+
+    def unsubscribe(self, queue: Queue):
+        return self.bus.unsubscribe(queue)
 
     def submit(self, suspension: InvocationSuspension):
         """Submit an InvocationSuspension to be processed.
@@ -33,12 +41,12 @@ class Qio:
 
     def run[R](self, suspension: InvocationSuspension[Callable[..., R]]) -> R:
         """Run an invocation and wait for its completion."""
-        completions = self.bus.subscribe({InvocationSucceeded, InvocationErrored})
-        self.submit(suspension)
-
+        completions = self.subscribe({InvocationSucceeded, InvocationErrored})
         try:
+            self.submit(suspension)
             while True:
-                match completions.get():
+                event = completions.get()
+                match event:
                     case InvocationSucceeded() as event:
                         if event.invocation_id == suspension.invocation.id:
                             return cast(R, event.value)
@@ -46,7 +54,7 @@ class Qio:
                         if event.invocation_id == suspension.invocation.id:
                             raise event.exception
         finally:
-            self.bus.unsubscribe(completions)
+            self.unsubscribe(completions)
 
     def shutdown(self):
         """Shut down all components."""
