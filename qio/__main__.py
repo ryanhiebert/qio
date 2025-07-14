@@ -54,7 +54,7 @@ app = Typer()
 
 
 @app.command()
-def enqueue():
+def submit():
     qio = Qio()
     try:
         qio.submit(regular(0, 2))
