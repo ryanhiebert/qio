@@ -19,7 +19,6 @@ class PikaBroker(Broker):
         self.__producer_channel = BlockingConnection().channel()
         self.__consumers = set[Consumer]()
         self.__messages = dict[Message, tuple[Consumer, int]]()
-        self.__suspended = set[Message]()
 
     def enqueue(self, body: bytes, /):
         with self.__producer_channel_lock:
@@ -39,23 +38,20 @@ class PikaBroker(Broker):
 
     def start(self, _: Message, /):
         """Start processing a message."""
-        pass  # Assume that the message has been started
+        pass  # We assume that the message has been started
 
     def suspend(self, message: Message, /):
         """Report that the processing of a message has been suspended."""
-        # Can't change prefetch window dynamically on the consumer
         consumer, tag = self.__messages[message]
-        consumer.ack(tag)
+        consumer.delay(tag)
 
     def resume(self, message: Message, /):
         """Report that the processing of a message has resumed."""
-        pass  # Message has already been acked, do nothing.
+        consumer, tag = self.__messages[message]
+        consumer.undelay(tag)
 
     def complete(self, message: Message, /):
         """Report that the processing of a message has completed."""
-        if message in self.__suspended:
-            self.__suspended.remove(message)
-            return  # Message has already been acked, do nothing.
         consumer, tag = self.__messages.pop(message)
         consumer.ack(tag)
 
