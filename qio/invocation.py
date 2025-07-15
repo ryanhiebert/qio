@@ -8,7 +8,6 @@ from datetime import datetime
 from typing import Any
 from typing import cast
 
-from .broker import Message
 from .id import random_id
 from .registry import ROUTINE_REGISTRY
 from .suspension import Suspension
@@ -115,7 +114,7 @@ class InvocationSuspended(BaseInvocationSuspended): ...
 @dataclass(eq=False, kw_only=True, repr=False)
 class LocalInvocationSuspended(BaseInvocationSuspended):
     generator: Generator[Invocation, Any, Any]
-    message: Message
+    invocation: Invocation
 
 
 @dataclass(eq=False, kw_only=True)

@@ -67,7 +67,7 @@ def submit():
 def monitor(raw: bool = False):
     if raw:
         qio = Qio()
-        events = qio.bus.subscribe({object})
+        events = qio.subscribe({object})
         try:
             while True:
                 print(events.get())

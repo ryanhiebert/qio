@@ -27,7 +27,7 @@ class Monitor(App):
         super().__init__()
         self.__qio = Qio()
         self.__thread = Thread(target=self.__listen)
-        self.__events = self.__qio.bus.subscribe(
+        self.__events = self.__qio.subscribe(
             {
                 InvocationSubmitted,
                 InvocationStarted,
