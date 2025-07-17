@@ -5,14 +5,13 @@ from pika import BlockingConnection
 from typer import Typer
 
 from . import routine
-from .invocation import INVOCATION_QUEUE_NAME
 from .monitor import Monitor
 from .qio import Qio
 from .sleep import sleep
 from .worker import Worker
 
 
-@routine()
+@routine(name="regular")
 def regular(instance: int, iterations: int):
     for i in range(iterations):
         print(f"Iteration {instance} {i} started")
@@ -21,12 +20,12 @@ def regular(instance: int, iterations: int):
     return f"Instance {instance} completed"
 
 
-@routine()
+@routine(name="raises")
 def raises():
     raise ValueError("This is a test exception")
 
 
-@routine()
+@routine(name="aregular")
 async def aregular(instance: int, iterations: int):
     return await regular(instance, iterations)
 
@@ -39,7 +38,7 @@ async def abstract(instance: int, iterations: int):
     return await aregular(instance, iterations)
 
 
-@routine()
+@routine(name="irregular")
 async def irregular():
     await regular(1, 2)
     print("irregular sleep started")
@@ -57,7 +56,7 @@ app = Typer()
 def submit():
     qio = Qio()
     try:
-        qio.submit(regular(0, 2))
+        # qio.submit(regular(0, 2))
         qio.submit(irregular())
     finally:
         qio.shutdown()
@@ -81,21 +80,16 @@ def monitor(raw: bool = False):
 
 @app.command()
 def worker():
-    worker = Worker(concurrency=3)
-    try:
-        worker()
-    except KeyboardInterrupt:
-        print("Shutting down gracefully.")
-        worker.stop()
-    finally:
-        worker.shutdown()
+    Worker(concurrency=3)()
 
 
 @app.command()
 def purge():
+    from qio.pika.broker import QUEUE_NAME
+
     channel = BlockingConnection().channel()
-    channel.queue_declare(queue=INVOCATION_QUEUE_NAME, durable=True)
-    channel.queue_purge(queue=INVOCATION_QUEUE_NAME)
+    channel.queue_declare(queue=QUEUE_NAME, durable=True)
+    channel.queue_purge(queue=QUEUE_NAME)
     print("Queue purged.")
 
 

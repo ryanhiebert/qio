@@ -1,9 +1,10 @@
-from collections.abc import Callable
 from collections.abc import Generator
 from collections.abc import Iterable
+from concurrent.futures import Future
+from contextlib import contextmanager
 from queue import Queue
+from queue import ShutDown
 from typing import Any
-from typing import cast
 
 from .broker import Message
 from .bus import Bus
@@ -15,7 +16,6 @@ from .invocation import InvocationStarted
 from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspended
-from .invocation import InvocationSuspension
 from .invocation import InvocationThrew
 from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
@@ -24,7 +24,10 @@ from .invocation import deserialize
 from .invocation import serialize
 from .pika.broker import PikaBroker
 from .pika.transport import PikaTransport
+from .registry import ROUTINE_REGISTRY
+from .routine import Routine
 from .suspension import Suspension
+from .thread import Thread
 
 
 class Qio:
@@ -33,43 +36,70 @@ class Qio:
         self.__broker = PikaBroker()
         self.__invocations = dict[Invocation, Message]()
 
-    def submit(self, suspension: InvocationSuspension):
-        """Submit an InvocationSuspension to be processed.
+    def run[R](self, invocation: Invocation[R], /) -> R:
+        with self.invocation_handler():
+            return invocation.start().result()
 
-        This publishes the submission event and enqueues the invocation.
-        """
-        self.__bus.publish(
-            InvocationSubmitted(
-                invocation_id=suspension.invocation.id,
-                routine=suspension.invocation.routine,
-                args=suspension.invocation.args,
-                kwargs=suspension.invocation.kwargs,
-            )
-        )
-        self.__broker.enqueue(serialize(suspension.invocation))
-
-    def run[R](self, suspension: InvocationSuspension[Callable[..., R]]) -> R:
-        """Run an invocation and wait for its completion."""
-        completions = self.subscribe({InvocationSucceeded, InvocationErrored})
-        try:
-            self.submit(suspension)
-            while True:
-                event = completions.get()
-                match event:
-                    case InvocationSucceeded() as event:
-                        if event.invocation_id == suspension.invocation.id:
-                            return cast(R, event.value)
-                    case InvocationErrored() as event:
-                        if event.invocation_id == suspension.invocation.id:
-                            raise event.exception
-        finally:
-            self.unsubscribe(completions)
+    def routine(self, routine_name: str, /) -> Routine:
+        return ROUTINE_REGISTRY[routine_name]
 
     def subscribe[T](self, types: Iterable[type[T]]) -> Queue[T]:
         return self.__bus.subscribe(types)
 
     def unsubscribe(self, queue: Queue):
         return self.__bus.unsubscribe(queue)
+
+    @contextmanager
+    def invocation_handler(self) -> Generator[Future]:
+        waiting: dict[str, Future] = {}
+        events = self.subscribe({InvocationSucceeded, InvocationErrored})
+
+        def resolver():
+            while True:
+                try:
+                    event = events.get()
+                except ShutDown:
+                    break
+
+                match event:
+                    case InvocationSucceeded(invocation_id=invocation_id, value=value):
+                        if invocation_id in waiting:
+                            future = waiting.pop(invocation_id)
+                            future.set_result(value)
+                    case InvocationErrored(
+                        invocation_id=invocation_id, exception=exception
+                    ):
+                        if invocation_id in waiting:
+                            future = waiting.pop(invocation_id)
+                            future.set_exception(exception)
+
+        resolver_thread = Thread(target=resolver)
+        resolver_thread.start()
+
+        def handler(invocation: Invocation, /) -> Future:
+            future = Future()
+            waiting[invocation.id] = future
+            self.submit(invocation)
+            return future
+
+        try:
+            with Invocation.handler(handler):
+                yield resolver_thread.future
+        finally:
+            self.unsubscribe(events)
+            resolver_thread.join()
+
+    def submit(self, invocation: Invocation, /):
+        """Submit an invocation to be run in the background."""
+        self.__bus.publish(
+            InvocationSubmitted(
+                invocation_id=invocation.id,
+                routine=invocation.routine,
+                args=invocation.args,
+                kwargs=invocation.kwargs,
+            )
+        )
+        self.__broker.enqueue(serialize(invocation))
 
     def consume(self, *, prefetch: int) -> Generator[Invocation]:
         for message in self.__broker.consume(prefetch=prefetch):

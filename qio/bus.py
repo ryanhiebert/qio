@@ -32,6 +32,7 @@ class Bus:
             subscriptions.discard(queue)
             if not subscriptions:
                 del self.__subscriptions[type]
+        queue.shutdown(immediate=True)
 
     def __distribute(self, event: Any):
         """Local-only distribution of events to subscribers."""

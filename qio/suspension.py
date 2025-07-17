@@ -1,16 +1,18 @@
+from abc import ABC
+from abc import abstractmethod
+from concurrent.futures import Future
 from dataclasses import dataclass
 from dataclasses import field
-from typing import Any
-from typing import cast
 
 from .id import random_id
 
 
 @dataclass(eq=False, kw_only=True)
-class Suspension:
+class Suspension[R](ABC):
     """Base class for all suspension types in the system."""
 
     id: str = field(default_factory=random_id)
 
-    def __await__(self) -> Any:
-        return cast(Any, (yield self))
+    @abstractmethod
+    def start(self) -> Future[R]:
+        raise NotImplementedError("Subclasses must implement this method.")

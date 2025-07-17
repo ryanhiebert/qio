@@ -1,32 +1,40 @@
 import json
+from collections.abc import Awaitable
 from collections.abc import Callable
 from collections.abc import Generator
+from concurrent.futures import Future
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import UTC
 from datetime import datetime
 from typing import Any
-from typing import cast
+from typing import Self
 
 from .id import random_id
-from .registry import ROUTINE_REGISTRY
 from .suspension import Suspension
-
-INVOCATION_QUEUE_NAME = "qio"
 
 
 @dataclass(eq=False, kw_only=True)
-class Invocation:
+class Invocation[R](Awaitable[R], Suspension[R]):
     id: str = field(default_factory=random_id)
     routine: str
-    args: tuple[Any]
+    args: tuple[Any, ...]
     kwargs: dict[str, Any]
 
-    def run(self) -> Any:
-        return ROUTINE_REGISTRY[self.routine].fn(*self.args, **self.kwargs)
+    __handler = ContextVar[Callable[[Self], Future] | None](
+        "InvocationSuspension.handler", default=None
+    )
 
-    def __await__(self) -> Any:
-        return cast(Any, (yield InvocationSuspension(invocation=self)))
+    @classmethod
+    @contextmanager
+    def handler(cls, handler: Callable[[Self], Future]):
+        token = cls.__handler.set(handler)
+        try:
+            yield
+        finally:
+            cls.__handler.reset(token)
 
     def __repr__(self):
         params_repr = ", ".join(
@@ -34,15 +42,14 @@ class Invocation:
         )
         return f"<{type(self).__name__} {self.id!r} {self.routine}({params_repr})>"
 
+    def __await__(self):
+        return (yield self)
 
-@dataclass(eq=False, kw_only=True)
-class InvocationSuspension[T: Callable[..., Any] = Callable[..., Any]](Suspension):
-    """A suspension that waits on an invocation to complete."""
-
-    invocation: Invocation
-
-    def __repr__(self):
-        return f"<{type(self).__name__} {self.id} {self.invocation!r}>"
+    def start(self) -> Future[R]:
+        handler = self.__handler.get()
+        if handler is None:
+            raise RuntimeError("No invocation runner configured.")
+        return handler(self)
 
 
 def serialize(invocation: Invocation, /) -> bytes:

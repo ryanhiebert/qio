@@ -1,12 +1,11 @@
 from collections.abc import Callable
 from concurrent.futures import Future
+from contextvars import copy_context
 from threading import Thread as BaseThread
 from typing import Any
 
 
 class Thread[T](BaseThread):
-    """A Thread that has a future to gather its result."""
-
     def __init__(
         self,
         target: Callable[..., T],
@@ -22,7 +21,12 @@ class Thread[T](BaseThread):
             args=(target, args, kwargs or {}),
             daemon=daemon,
         )
-        self._future = Future[T]()
+        self.__future = Future[T]()
+
+    def start(self) -> None:
+        if not hasattr(self, "__context"):
+            self.__context = copy_context()
+        super().start()
 
     def _run(
         self,
@@ -30,17 +34,17 @@ class Thread[T](BaseThread):
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
     ) -> None:
-        if not self._future.set_running_or_notify_cancel():
+        if not self.__future.set_running_or_notify_cancel():
             return
 
         try:
-            result = target(*args, **kwargs)
+            result = self.__context.run(target, *args, **kwargs)
         except BaseException as exception:
-            self._future.set_exception(exception)
+            self.__future.set_exception(exception)
         else:
-            self._future.set_result(result)
+            self.__future.set_result(result)
 
     @property
     def future(self) -> Future[T]:
         """Get the Future associated with this thread."""
-        return self._future
+        return self.__future
