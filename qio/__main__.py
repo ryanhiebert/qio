@@ -5,6 +5,7 @@ from pika import BlockingConnection
 from typer import Typer
 
 from . import routine
+from .gather import gather
 from .monitor import Monitor
 from .qio import Qio
 from .sleep import sleep
@@ -46,6 +47,7 @@ async def irregular():
     print("irregular sleep ended. Starting qio sleep.")
     await sleep(4)
     print("qio sleep ended")
+    await gather(regular(7, 2), regular(8, 1))
     return await abstract(2, 5)
 
 
