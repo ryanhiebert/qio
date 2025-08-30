@@ -1,6 +1,8 @@
 qio
 ===
 
+![qio Logo](logo.png)
+
 Python background queue processing with an async twist.
 
 Principles
