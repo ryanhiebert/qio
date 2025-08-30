@@ -39,7 +39,7 @@ class Qio:
     def run[R](self, invocation: Invocation[R], /) -> R:
         with self.invocation_handler():
             return invocation.start().result()
-    
+
     def purge(self):
         self.__broker.purge()
 
