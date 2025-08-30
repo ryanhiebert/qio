@@ -1,7 +1,6 @@
 from contextlib import suppress
 from time import sleep as time_sleep
 
-from pika import BlockingConnection
 from typer import Typer
 
 from . import routine
@@ -58,7 +57,6 @@ app = Typer()
 def submit():
     qio = Qio()
     try:
-        # qio.submit(regular(0, 2))
         qio.submit(irregular())
     finally:
         qio.shutdown()
@@ -87,12 +85,11 @@ def worker():
 
 @app.command()
 def purge():
-    from qio.pika.broker import QUEUE_NAME
-
-    channel = BlockingConnection().channel()
-    channel.queue_declare(queue=QUEUE_NAME, durable=True)
-    channel.queue_purge(queue=QUEUE_NAME)
-    print("Queue purged.")
+    qio = Qio()
+    try:
+        qio.purge()
+    finally:
+        qio.shutdown()
 
 
 if __name__ == "__main__":

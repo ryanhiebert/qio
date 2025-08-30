@@ -29,6 +29,11 @@ class PikaBroker(Broker):
                 body=body,
             )
 
+    def purge(self):
+        with self.__producer_channel_lock:
+            self.__producer_channel.queue_declare(queue=QUEUE_NAME, durable=True)
+            self.__producer_channel.queue_purge(queue=QUEUE_NAME)
+
     def consume(self, *, prefetch: int) -> Iterator[Message]:
         consumer = Consumer(queue=QUEUE_NAME, prefetch=prefetch)
         self.__consumers.add(consumer)

@@ -39,6 +39,9 @@ class Qio:
     def run[R](self, invocation: Invocation[R], /) -> R:
         with self.invocation_handler():
             return invocation.start().result()
+    
+    def purge(self):
+        self.__broker.purge()
 
     def routine(self, routine_name: str, /) -> Routine:
         return ROUTINE_REGISTRY[routine_name]
