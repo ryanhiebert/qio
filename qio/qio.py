@@ -120,15 +120,13 @@ class Qio:
     ):
         """Signal that the invocation has suspended."""
         if suspension:
-            self.__bus.publish(
-                InvocationSuspended(invocation_id=invocation.id, suspension=suspension)
-            )
+            self.__bus.publish(InvocationSuspended(invocation_id=invocation.id))
             self.__bus.publish_local(
                 LocalInvocationSuspended(
                     invocation_id=invocation.id,
+                    suspension=suspension,
                     invocation=invocation,
                     generator=generator,
-                    suspension=suspension,
                 )
             )
         self.__broker.suspend(self.__invocations[invocation])

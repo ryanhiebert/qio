@@ -1,5 +1,4 @@
 import json
-from collections.abc import Awaitable
 from collections.abc import Callable
 from collections.abc import Generator
 from concurrent.futures import Future
@@ -13,18 +12,19 @@ from typing import Any
 from typing import Self
 
 from .id import random_id
+from .suspendable import Suspendable
 from .suspension import Suspension
 
 
 @dataclass(eq=False, kw_only=True)
-class Invocation[R](Awaitable[R], Suspension[R]):
+class Invocation[R](Suspendable[R], Suspension[R]):
     id: str = field(default_factory=random_id)
     routine: str
     args: tuple[Any, ...]
     kwargs: dict[str, Any]
 
     __handler = ContextVar[Callable[[Self], Future] | None](
-        "InvocationSuspension.handler", default=None
+        "Invocation.handler", default=None
     )
 
     @classmethod
@@ -104,14 +104,7 @@ class InvocationStarted(InvocationEvent): ...
 
 
 @dataclass(eq=False, kw_only=True)
-class BaseInvocationSuspended(InvocationEvent):
-    suspension: Suspension
-
-    def __repr__(self):
-        return (
-            f"<{type(self).__name__} {self.invocation_id}"
-            f" suspension={self.suspension!r}>"
-        )
+class BaseInvocationSuspended(InvocationEvent): ...
 
 
 @dataclass(eq=False, kw_only=True, repr=False)
@@ -120,8 +113,15 @@ class InvocationSuspended(BaseInvocationSuspended): ...
 
 @dataclass(eq=False, kw_only=True, repr=False)
 class LocalInvocationSuspended(BaseInvocationSuspended):
+    suspension: Suspension
     generator: Generator[Invocation, Any, Any]
     invocation: Invocation
+
+    def __repr__(self):
+        return (
+            f"<{type(self).__name__} {self.invocation_id}"
+            f" suspension={self.suspension!r}>"
+        )
 
 
 @dataclass(eq=False, kw_only=True)

@@ -47,7 +47,7 @@ async def irregular():
     print("irregular sleep ended. Starting qio sleep.")
     await sleep(4)
     print("qio sleep ended")
-    await gather(regular(7, 2), regular(8, 1))
+    await gather(regular(7, 2), sleep(5), abstract(8, 1))
     return await abstract(2, 5)
 
 

@@ -3,7 +3,7 @@ from concurrent.futures import Future
 from dataclasses import dataclass
 from threading import Timer
 
-from .suspendable import suspendable
+from .suspending import suspending
 from .suspension import Suspension
 
 
@@ -19,6 +19,6 @@ class SleepSuspension(Suspension):
         return future
 
 
-@suspendable
+@suspending
 def sleep(interval: float, /) -> Generator[SleepSuspension]:
     yield SleepSuspension(interval=interval)
