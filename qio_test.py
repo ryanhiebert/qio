@@ -8,7 +8,7 @@ from qio.__main__ import irregular
 from qio.invocation import InvocationSucceeded
 
 
-@pytest.mark.timeout(30)
+@pytest.mark.timeout(10)
 def test_integration():
     # Prefers a clean environment and queue
     qio = Qio()

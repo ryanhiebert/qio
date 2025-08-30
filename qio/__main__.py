@@ -15,7 +15,7 @@ from .worker import Worker
 def regular(instance: int, iterations: int):
     for i in range(iterations):
         print(f"Iteration {instance} {i} started")
-        time_sleep(1)
+        time_sleep(0.1)
     print(f"Instance {instance} completed")
     return f"Instance {instance} completed"
 
@@ -42,11 +42,11 @@ async def abstract(instance: int, iterations: int):
 async def irregular():
     await regular(1, 2)
     print("irregular sleep started")
-    time_sleep(1)
+    time_sleep(0.1)
     print("irregular sleep ended. Starting qio sleep.")
-    await sleep(4)
+    await sleep(0.4)
     print("qio sleep ended")
-    await gather(regular(7, 2), sleep(5), abstract(8, 1))
+    await gather(regular(7, 2), sleep(0.5), abstract(8, 1))
     return await abstract(2, 5)
 
 
