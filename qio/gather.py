@@ -1,5 +1,4 @@
 from collections.abc import Awaitable
-from collections.abc import Generator
 from collections.abc import Iterable
 from concurrent.futures import Future
 from typing import Any
@@ -8,10 +7,9 @@ from typing import overload
 from .suspend import suspend
 from .suspendable import Suspendable
 from .suspending import suspending
-from .suspension import Suspension
 
 
-class GatherSuspension[T](Suspension[T]):
+class Gather[T](Suspendable[T]):
     def __init__(self, awaitables: Iterable[Awaitable[Any]]):
         super().__init__()
         self.__awaitables = awaitables
@@ -61,23 +59,23 @@ A = Awaitable
 
 
 @overload
-def gather[T1](a: A[T1], /) -> Suspendable[tuple[T1]]: ...
+def gather[T1](a: A[T1], /) -> Gather[tuple[T1]]: ...
 @overload
-def gather[T1, T2](a1: A[T1], a2: A[T2], /) -> Suspendable[tuple[T1, T2]]: ...
+def gather[T1, T2](a1: A[T1], a2: A[T2], /) -> Gather[tuple[T1, T2]]: ...
 @overload
 def gather[T1, T2, T3](
     a1: A[T1], a2: A[T2], a3: A[T3], /
-) -> Suspendable[tuple[T1, T2, T3]]: ...
+) -> Gather[tuple[T1, T2, T3]]: ...
 @overload
 def gather[T1, T2, T3, T4](
     a1: A[T1], a2: A[T2], a3: A[T3], a4: A[T4], /
-) -> Suspendable[tuple[T1, T2, T3, T4]]: ...
+) -> Gather[tuple[T1, T2, T3, T4]]: ...
 @overload
 def gather[T1, T2, T3, T4, T5](
     a1: A[T1], a2: A[T2], a3: A[T3], a4: A[T4], a5: A[T5], /
-) -> Suspendable[tuple[T1, T2, T3, T4, T5]]: ...
+) -> Gather[tuple[T1, T2, T3, T4, T5]]: ...
 
 
 @suspending
-def gather(*awaitables: Awaitable[Any]) -> Generator[Suspension[Any], Any, Any]:
-    return (yield GatherSuspension[Any](awaitables))
+def gather(*awaitables: Awaitable[Any]) -> Gather[Any]:
+    return Gather(awaitables)

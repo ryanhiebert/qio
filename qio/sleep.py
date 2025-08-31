@@ -1,4 +1,3 @@
-from collections.abc import Generator
 from concurrent.futures import Future
 from dataclasses import dataclass
 from threading import Timer
@@ -8,7 +7,7 @@ from .suspension import Suspension
 
 
 @dataclass(eq=False, kw_only=True)
-class SleepSuspension(Suspension):
+class Sleep(Suspension):
     interval: float
 
     def start(self):
@@ -20,5 +19,5 @@ class SleepSuspension(Suspension):
 
 
 @suspending
-def sleep(interval: float, /) -> Generator[SleepSuspension]:
-    yield SleepSuspension(interval=interval)
+def sleep(interval: float, /) -> Sleep:
+    return Sleep(interval=interval)

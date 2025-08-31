@@ -17,7 +17,7 @@ from .suspension import Suspension
 
 
 @dataclass(eq=False, kw_only=True)
-class Invocation[R](Suspendable[R], Suspension[R]):
+class Invocation[R](Suspendable[R]):
     id: str = field(default_factory=random_id)
     routine: str
     args: tuple[Any, ...]
