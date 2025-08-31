@@ -2,12 +2,11 @@ from concurrent.futures import Future
 from dataclasses import dataclass
 from threading import Timer
 
-from .suspending import suspending
-from .suspension import Suspension
+from .suspendable import Suspendable
 
 
 @dataclass(eq=False, kw_only=True)
-class Sleep(Suspension):
+class Sleep(Suspendable[None]):
     interval: float
 
     def start(self):
@@ -18,6 +17,5 @@ class Sleep(Suspension):
         return future
 
 
-@suspending
 def sleep(interval: float, /) -> Sleep:
     return Sleep(interval=interval)

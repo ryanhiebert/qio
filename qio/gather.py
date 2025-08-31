@@ -6,7 +6,6 @@ from typing import overload
 
 from .suspend import suspend
 from .suspendable import Suspendable
-from .suspending import suspending
 
 
 class Gather[T](Suspendable[T]):
@@ -76,6 +75,5 @@ def gather[T1, T2, T3, T4, T5](
 ) -> Gather[tuple[T1, T2, T3, T4, T5]]: ...
 
 
-@suspending
 def gather(*awaitables: Awaitable[Any]) -> Gather[Any]:
     return Gather(awaitables)
