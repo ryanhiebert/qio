@@ -6,14 +6,17 @@ from threading import Thread
 from typing import cast
 
 from pika import BlockingConnection
+from pika import ConnectionParameters
+from pika import URLParameters
 
 from qio.transport import Transport
 
 
 class PikaTransport(Transport):
-    def __init__(self):
+    def __init__(self, connection_params: ConnectionParameters | URLParameters):
+        self.__connection_params = connection_params
         self.__subscriber = Queue[bytes]()
-        self.__subscribe_connection = BlockingConnection()
+        self.__subscribe_connection = BlockingConnection(self.__connection_params)
         self.__subscribe_channel = self.__subscribe_connection.channel()
         self.__queue_name = cast(
             str, self.__subscribe_channel.queue_declare("", exclusive=True).method.queue
@@ -27,7 +30,7 @@ class PikaTransport(Transport):
         self.__subscribe_thread.start()
 
         self.__lock = Lock()
-        self.__publish_channel = BlockingConnection().channel()
+        self.__publish_channel = BlockingConnection(self.__connection_params).channel()
 
     def __listen(self):
         for _, _, body in self.__subscribe_channel.consume(

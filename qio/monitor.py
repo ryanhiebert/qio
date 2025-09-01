@@ -1,5 +1,6 @@
 from queue import ShutDown
 
+from pika import ConnectionParameters
 from textual.app import App
 from textual.app import ComposeResult
 from textual.widgets import DataTable
@@ -27,7 +28,11 @@ class Monitor(App):
 
     def __init__(self):
         super().__init__()
-        self.__qio = Qio(broker=PikaBroker(), transport=PikaTransport())
+        connection_params = ConnectionParameters()
+        self.__qio = Qio(
+            broker=PikaBroker(connection_params),
+            transport=PikaTransport(connection_params),
+        )
         self.__thread = Thread(target=self.__listen)
         self.__events = self.__qio.subscribe(
             {

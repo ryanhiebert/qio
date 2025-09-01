@@ -5,6 +5,8 @@ from typing import Any
 from typing import cast
 
 from pika import BlockingConnection
+from pika import ConnectionParameters
+from pika import URLParameters
 
 from qio.broker import Broker
 from qio.broker import Message
@@ -15,9 +17,10 @@ QUEUE_NAME = "qio"
 class PikaBroker(Broker):
     """A broker enables producing and consuming messages on a queue."""
 
-    def __init__(self):
+    def __init__(self, connection_params: ConnectionParameters | URLParameters):
+        self.__connection_params = connection_params
         self.__producer_channel_lock = Lock()
-        self.__producer_channel = BlockingConnection().channel()
+        self.__producer_channel = BlockingConnection(self.__connection_params).channel()
         self.__consumers = set[_Consumer]()
         self.__messages = dict[Message, tuple[_Consumer, int]]()
         self.__suspended = set[Message]()
@@ -36,7 +39,11 @@ class PikaBroker(Broker):
             self.__producer_channel.queue_purge(queue=QUEUE_NAME)
 
     def consume(self, *, prefetch: int) -> Iterator[Message]:
-        consumer = _Consumer(queue=QUEUE_NAME, prefetch=prefetch)
+        consumer = _Consumer(
+            connection_params=self.__connection_params,
+            queue=QUEUE_NAME,
+            prefetch=prefetch,
+        )
         self.__consumers.add(consumer)
         for tag, body in consumer:
             message = Message(body=body)
@@ -76,8 +83,14 @@ class PikaBroker(Broker):
 
 
 class _Consumer:
-    def __init__(self, *, queue: str, prefetch: int):
-        self.__connection = BlockingConnection()
+    def __init__(
+        self,
+        *,
+        connection_params: ConnectionParameters | URLParameters,
+        queue: str,
+        prefetch: int,
+    ):
+        self.__connection = BlockingConnection(connection_params)
         self.__channel = self.__connection.channel()
         self.__channel.queue_declare(queue=queue, durable=True)
         self.__channel.basic_qos(prefetch_count=prefetch)

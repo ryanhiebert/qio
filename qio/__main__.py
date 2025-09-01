@@ -1,6 +1,7 @@
 from contextlib import suppress
 from time import sleep as time_sleep
 
+from pika import ConnectionParameters
 from typer import Typer
 
 from . import routine
@@ -57,7 +58,10 @@ app = Typer()
 
 @app.command()
 def submit():
-    qio = Qio(broker=PikaBroker(), transport=PikaTransport())
+    connection_params = ConnectionParameters()
+    qio = Qio(
+        broker=PikaBroker(connection_params), transport=PikaTransport(connection_params)
+    )
     try:
         qio.submit(irregular())
     finally:
@@ -67,7 +71,11 @@ def submit():
 @app.command()
 def monitor(raw: bool = False):
     if raw:
-        qio = Qio(broker=PikaBroker(), transport=PikaTransport())
+        connection_params = ConnectionParameters()
+        qio = Qio(
+            broker=PikaBroker(connection_params),
+            transport=PikaTransport(connection_params),
+        )
         events = qio.subscribe({object})
         try:
             while True:
@@ -87,7 +95,10 @@ def worker():
 
 @app.command()
 def purge():
-    qio = Qio(broker=PikaBroker(), transport=PikaTransport())
+    connection_params = ConnectionParameters()
+    qio = Qio(
+        broker=PikaBroker(connection_params), transport=PikaTransport(connection_params)
+    )
     try:
         qio.purge()
     finally:

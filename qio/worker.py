@@ -7,6 +7,8 @@ from queue import Queue
 from queue import ShutDown
 from threading import Timer
 
+from pika import ConnectionParameters
+
 from .continuation import Continuation
 from .continuation import SendContinuation
 from .continuation import ThrowContinuation
@@ -20,7 +22,11 @@ from .thread import Thread
 
 class Worker:
     def __init__(self, *, concurrency: int):
-        self.__qio = Qio(broker=PikaBroker(), transport=PikaTransport())
+        connection_params = ConnectionParameters()
+        self.__qio = Qio(
+            broker=PikaBroker(connection_params),
+            transport=PikaTransport(connection_params),
+        )
         self.__tasks = Queue[Invocation | SendContinuation | ThrowContinuation]()
         self.__consumer = self.__qio.consume(prefetch=concurrency)
         self.__continuer_events = self.__qio.subscribe({LocalInvocationSuspended})
