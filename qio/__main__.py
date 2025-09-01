@@ -90,7 +90,11 @@ def monitor(raw: bool = False):
 
 @app.command()
 def worker():
-    Worker(concurrency=3)()
+    connection_params = ConnectionParameters()
+    qio = Qio(
+        broker=PikaBroker(connection_params), transport=PikaTransport(connection_params)
+    )
+    Worker(qio, concurrency=3)()
 
 
 @app.command()

@@ -7,26 +7,18 @@ from queue import Queue
 from queue import ShutDown
 from threading import Timer
 
-from pika import ConnectionParameters
-
 from .continuation import Continuation
 from .continuation import SendContinuation
 from .continuation import ThrowContinuation
 from .invocation import Invocation
 from .invocation import LocalInvocationSuspended
-from .pika.broker import PikaBroker
-from .pika.transport import PikaTransport
 from .qio import Qio
 from .thread import Thread
 
 
 class Worker:
-    def __init__(self, *, concurrency: int):
-        connection_params = ConnectionParameters()
-        self.__qio = Qio(
-            broker=PikaBroker(connection_params),
-            transport=PikaTransport(connection_params),
-        )
+    def __init__(self, qio: Qio, *, concurrency: int):
+        self.__qio = qio
         self.__tasks = Queue[Invocation | SendContinuation | ThrowContinuation]()
         self.__consumer = self.__qio.consume(prefetch=concurrency)
         self.__continuer_events = self.__qio.subscribe({LocalInvocationSuspended})
