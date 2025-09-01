@@ -1,10 +1,9 @@
 import queue
+import threading
 from collections.abc import Iterator
 
 from qio.broker import Broker
 from qio.broker import Message
-
-from .consumer import Consumer
 
 
 class StubBroker(Broker):
@@ -12,7 +11,7 @@ class StubBroker(Broker):
         self.__queue = queue.Queue[bytes]()
         self.__processing = set[Message]()
         self.__suspended = set[Message]()
-        self.__consumers: dict[Message, Consumer] = {}
+        self.__consumers: dict[Message, _Consumer] = {}
 
     def enqueue(self, body: bytes, /):
         self.__queue.put(body)
@@ -21,7 +20,7 @@ class StubBroker(Broker):
         self.__queue = queue.Queue[bytes]()
 
     def consume(self, *, prefetch: int) -> Iterator[Message]:
-        consumer = Consumer(self.__queue, prefetch)
+        consumer = _Consumer(self.__queue, prefetch)
 
         for payload in consumer:
             message = Message(body=payload)
@@ -58,3 +57,33 @@ class StubBroker(Broker):
         self.__processing.clear()
         self.__suspended.clear()
         self.__consumers.clear()
+
+
+class _Consumer:
+    def __init__(self, queue: queue.Queue[bytes], prefetch: int):
+        self.__queue = queue
+        self.__capacity = prefetch
+        # A bounded semaphore won't work because resume()
+        # needs to decrease capacity without blocking
+        self.__condition = threading.Condition()
+
+    def __iter__(self) -> Iterator[bytes]:
+        while True:
+            # Wait for capacity to consume a message
+            with self.__condition:
+                while self.__capacity <= 0:
+                    self.__condition.wait()
+                self.__capacity -= 1
+            try:
+                yield self.__queue.get()
+            except queue.ShutDown:
+                return
+
+    def ack(self):
+        with self.__condition:
+            self.__capacity += 1
+            self.__condition.notify()
+
+    def unack(self):
+        with self.__condition:
+            self.__capacity -= 1
