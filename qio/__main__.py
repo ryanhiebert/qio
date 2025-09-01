@@ -6,6 +6,8 @@ from typer import Typer
 from . import routine
 from .gather import gather
 from .monitor import Monitor
+from .pika.broker import PikaBroker
+from .pika.transport import PikaTransport
 from .qio import Qio
 from .sleep import sleep
 from .worker import Worker
@@ -55,7 +57,7 @@ app = Typer()
 
 @app.command()
 def submit():
-    qio = Qio()
+    qio = Qio(broker=PikaBroker(), transport=PikaTransport())
     try:
         qio.submit(irregular())
     finally:
@@ -65,7 +67,7 @@ def submit():
 @app.command()
 def monitor(raw: bool = False):
     if raw:
-        qio = Qio()
+        qio = Qio(broker=PikaBroker(), transport=PikaTransport())
         events = qio.subscribe({object})
         try:
             while True:
@@ -85,7 +87,7 @@ def worker():
 
 @app.command()
 def purge():
-    qio = Qio()
+    qio = Qio(broker=PikaBroker(), transport=PikaTransport())
     try:
         qio.purge()
     finally:

@@ -12,13 +12,15 @@ from .continuation import SendContinuation
 from .continuation import ThrowContinuation
 from .invocation import Invocation
 from .invocation import LocalInvocationSuspended
+from .pika.broker import PikaBroker
+from .pika.transport import PikaTransport
 from .qio import Qio
 from .thread import Thread
 
 
 class Worker:
     def __init__(self, *, concurrency: int):
-        self.__qio = Qio()
+        self.__qio = Qio(broker=PikaBroker(), transport=PikaTransport())
         self.__tasks = Queue[Invocation | SendContinuation | ThrowContinuation]()
         self.__consumer = self.__qio.consume(prefetch=concurrency)
         self.__continuer_events = self.__qio.subscribe({LocalInvocationSuspended})

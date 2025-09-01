@@ -14,6 +14,8 @@ from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspended
 from .invocation import InvocationThrew
+from .pika.broker import PikaBroker
+from .pika.transport import PikaTransport
 from .qio import Qio
 from .thread import Thread
 
@@ -25,7 +27,7 @@ class Monitor(App):
 
     def __init__(self):
         super().__init__()
-        self.__qio = Qio()
+        self.__qio = Qio(broker=PikaBroker(), transport=PikaTransport())
         self.__thread = Thread(target=self.__listen)
         self.__events = self.__qio.subscribe(
             {

@@ -6,6 +6,7 @@ from queue import Queue
 from queue import ShutDown
 from typing import Any
 
+from .broker import Broker
 from .broker import Message
 from .bus import Bus
 from .invocation import Invocation
@@ -22,18 +23,17 @@ from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
 from .invocation import deserialize
 from .invocation import serialize
-from .pika.broker import PikaBroker
-from .pika.transport import PikaTransport
 from .registry import ROUTINE_REGISTRY
 from .routine import Routine
 from .suspension import Suspension
 from .thread import Thread
+from .transport import Transport
 
 
 class Qio:
-    def __init__(self):
-        self.__bus = Bus(PikaTransport())
-        self.__broker = PikaBroker()
+    def __init__(self, *, broker: Broker, transport: Transport):
+        self.__bus = Bus(transport)
+        self.__broker = broker
         self.__invocations = dict[Invocation, Message]()
 
     def run[R](self, invocation: Invocation[R], /) -> R:

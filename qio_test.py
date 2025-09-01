@@ -3,15 +3,17 @@ import sys
 
 import pytest
 
-from qio import Qio
 from qio.__main__ import irregular
 from qio.invocation import InvocationSucceeded
+from qio.pika.broker import PikaBroker
+from qio.pika.transport import PikaTransport
+from qio.qio import Qio
 
 
 @pytest.mark.timeout(10)
 def test_integration():
     # Prefers a clean environment and queue
-    qio = Qio()
+    qio = Qio(broker=PikaBroker(), transport=PikaTransport())
 
     try:
         qio.purge()
