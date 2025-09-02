@@ -3,14 +3,16 @@ import threading
 import time
 
 import pytest
+from pika import ConnectionParameters
 
-from .transport import StubTransport
+from .transport import PikaTransport
 
 
 @pytest.mark.timeout(2)
-def test_stub_transport_multiple_messages():
+def test_pika_transport_multiple_messages():
     """Verify that multiple messages can be published and received in order."""
-    transport = StubTransport()
+    connection_params = ConnectionParameters()
+    transport = PikaTransport(connection_params)
 
     messages = [b"message1", b"message2", b"message3"]
     for msg in messages:
@@ -28,9 +30,10 @@ def test_stub_transport_multiple_messages():
 
 
 @pytest.mark.timeout(2)
-def test_stub_transport_shutdown():
+def test_pika_transport_shutdown():
     """Verify that shutdown stops subscribers and they receive all pending messages."""
-    transport = StubTransport()
+    connection_params = ConnectionParameters()
+    transport = PikaTransport(connection_params)
 
     transport.publish(b"test message 1")
     transport.publish(b"test message 2")
@@ -52,9 +55,10 @@ def test_stub_transport_shutdown():
 
 
 @pytest.mark.timeout(2)
-def test_stub_transport_concurrent_publishing():
+def test_pika_transport_concurrent_publishing():
     """Verify that multiple threads can publish messages concurrently without issues."""
-    transport = StubTransport()
+    connection_params = ConnectionParameters()
+    transport = PikaTransport(connection_params)
     received_messages = []
 
     def publisher(start_num: int, count: int):
