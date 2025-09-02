@@ -29,8 +29,6 @@ from .suspension import Suspension
 from .thread import Thread
 from .transport import Transport
 
-QUEUE = "qio"
-
 
 class Qio:
     def __init__(self, *, broker: Broker, transport: Transport):
@@ -42,8 +40,8 @@ class Qio:
         with self.invocation_handler():
             return invocation.start().result()
 
-    def purge(self):
-        self.__broker.purge(queue=QUEUE)
+    def purge(self, *, queue: str):
+        self.__broker.purge(queue=queue)
 
     def routine(self, routine_name: str, /) -> Routine:
         return ROUTINE_REGISTRY[routine_name]
@@ -96,6 +94,7 @@ class Qio:
 
     def submit(self, invocation: Invocation, /):
         """Submit an invocation to be run in the background."""
+        routine = self.routine(invocation.routine)
         self.__bus.publish(
             InvocationSubmitted(
                 invocation_id=invocation.id,
@@ -104,10 +103,10 @@ class Qio:
                 kwargs=invocation.kwargs,
             )
         )
-        self.__broker.enqueue(serialize(invocation), queue=QUEUE)
+        self.__broker.enqueue(serialize(invocation), queue=routine.queue)
 
-    def consume(self, *, prefetch: int) -> Generator[Invocation]:
-        for message in self.__broker.consume(queue=QUEUE, prefetch=prefetch):
+    def consume(self, *, queue: str, prefetch: int) -> Generator[Invocation]:
+        for message in self.__broker.consume(queue=queue, prefetch=prefetch):
             invocation = deserialize(message.body)
             self.__invocations[invocation] = message
             yield invocation

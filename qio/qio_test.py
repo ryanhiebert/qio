@@ -11,7 +11,7 @@ def test_qio_with_custom_broker_and_transport():
 
     try:
         # Test purge (uses broker)
-        qio.purge()
+        qio.purge(queue="qio")
 
         # Test subscriptions (uses transport)
         events = qio.subscribe({object})
@@ -34,8 +34,8 @@ def test_different_qio_instances_are_independent():
 
     try:
         # Both should work independently
-        qio1.purge()
-        qio2.purge()
+        qio1.purge(queue="qio")
+        qio2.purge(queue="qio")
 
         # Test that they can have independent subscriptions
         events1 = qio1.subscribe({object})

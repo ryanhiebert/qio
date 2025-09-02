@@ -4,9 +4,10 @@ from .invocation import Invocation
 
 
 class Routine[**A, R]:
-    def __init__(self, fn: Callable[A, R], *, name: str):
+    def __init__(self, fn: Callable[A, R], *, name: str, queue: str):
         self.fn = fn
         self.name = name
+        self.queue = queue
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.name!r}>"

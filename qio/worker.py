@@ -17,10 +17,10 @@ from .thread import Thread
 
 
 class Worker:
-    def __init__(self, qio: Qio, *, concurrency: int):
+    def __init__(self, qio: Qio, *, queue: str, concurrency: int):
         self.__qio = qio
         self.__tasks = Queue[Invocation | SendContinuation | ThrowContinuation]()
-        self.__consumer = self.__qio.consume(prefetch=concurrency)
+        self.__consumer = self.__qio.consume(queue=queue, prefetch=concurrency)
         self.__continuer_events = self.__qio.subscribe({LocalInvocationSuspended})
 
         # Start threads event queues are created

@@ -20,7 +20,7 @@ def test_integration():
     )
 
     try:
-        qio.purge()
+        qio.purge(queue="qio")
         events = qio.subscribe({InvocationSucceeded})
         invocation = irregular()
         qio.submit(invocation)
