@@ -15,17 +15,17 @@ class Broker(ABC):
     """A broker enables producing and consuming messages on a queue."""
 
     @abstractmethod
-    def enqueue(self, body: bytes, /):
+    def enqueue(self, body: bytes, /, *, queue: str):
         """Enqueue a message."""
         raise NotImplementedError("Subclasses must implement this method.")
 
     @abstractmethod
-    def purge(self):
+    def purge(self, *, queue: str):
         """Purge all messages from the queue."""
         raise NotImplementedError("Subclasses must implement this method.")
 
     @abstractmethod
-    def consume(self, *, prefetch: int) -> Iterator[Message]:
+    def consume(self, *, queue: str, prefetch: int) -> Iterator[Message]:
         """Consume messages from the queue."""
         raise NotImplementedError("Subclasses must implement this method.")
 

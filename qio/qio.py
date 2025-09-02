@@ -29,6 +29,8 @@ from .suspension import Suspension
 from .thread import Thread
 from .transport import Transport
 
+QUEUE = "qio"
+
 
 class Qio:
     def __init__(self, *, broker: Broker, transport: Transport):
@@ -41,7 +43,7 @@ class Qio:
             return invocation.start().result()
 
     def purge(self):
-        self.__broker.purge()
+        self.__broker.purge(queue=QUEUE)
 
     def routine(self, routine_name: str, /) -> Routine:
         return ROUTINE_REGISTRY[routine_name]
@@ -102,10 +104,10 @@ class Qio:
                 kwargs=invocation.kwargs,
             )
         )
-        self.__broker.enqueue(serialize(invocation))
+        self.__broker.enqueue(serialize(invocation), queue=QUEUE)
 
     def consume(self, *, prefetch: int) -> Generator[Invocation]:
-        for message in self.__broker.consume(prefetch=prefetch):
+        for message in self.__broker.consume(queue=QUEUE, prefetch=prefetch):
             invocation = deserialize(message.body)
             self.__invocations[invocation] = message
             yield invocation

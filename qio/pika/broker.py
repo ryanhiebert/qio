@@ -11,8 +11,6 @@ from pika import URLParameters
 from qio.broker import Broker
 from qio.broker import Message
 
-QUEUE_NAME = "qio"
-
 
 class PikaBroker(Broker):
     """A broker enables producing and consuming messages on a queue."""
@@ -25,23 +23,23 @@ class PikaBroker(Broker):
         self.__messages = dict[Message, tuple[_Consumer, int]]()
         self.__suspended = set[Message]()
 
-    def enqueue(self, body: bytes, /):
+    def enqueue(self, body: bytes, /, *, queue: str):
         with self.__producer_channel_lock:
             self.__producer_channel.basic_publish(
                 exchange="",
-                routing_key=QUEUE_NAME,
+                routing_key=queue,
                 body=body,
             )
 
-    def purge(self):
+    def purge(self, *, queue: str):
         with self.__producer_channel_lock:
-            self.__producer_channel.queue_declare(queue=QUEUE_NAME, durable=True)
-            self.__producer_channel.queue_purge(queue=QUEUE_NAME)
+            self.__producer_channel.queue_declare(queue=queue, durable=True)
+            self.__producer_channel.queue_purge(queue=queue)
 
-    def consume(self, *, prefetch: int) -> Iterator[Message]:
+    def consume(self, *, queue: str, prefetch: int) -> Iterator[Message]:
         consumer = _Consumer(
             connection_params=self.__connection_params,
-            queue=QUEUE_NAME,
+            queue=queue,
             prefetch=prefetch,
         )
         self.__consumers.add(consumer)
