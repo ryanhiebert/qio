@@ -75,6 +75,7 @@ class Monitor(App):
                     event.invocation_id,
                     event.routine,
                     "Submitted",
+                    self.__qio.routine(event.routine).queue or "qio",
                     key=event.invocation_id,
                 )
             case InvocationStarted():
@@ -127,7 +128,7 @@ class Monitor(App):
 
     def on_mount(self):
         table = self.query_one(DataTable)
-        self.__column_keys = table.add_columns("ID", "Name", "Status")
+        self.__column_keys = table.add_columns("ID", "Name", "Status", "Queue")
         self.__thread.start()
 
     def on_unmount(self) -> None:
