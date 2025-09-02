@@ -7,7 +7,7 @@ def test_qio_with_custom_broker_and_transport():
     """Qio custom broker and transport implementations."""
     broker = StubBroker()
     transport = StubTransport()
-    qio = Qio(broker=broker, transport=transport)
+    qio = Qio(broker=broker, transport=transport, default_queue="qio")
 
     try:
         # Test purge (uses broker)
@@ -26,11 +26,11 @@ def test_different_qio_instances_are_independent():
     # Create two Qio instances with different stub implementations
     broker1 = StubBroker()
     transport1 = StubTransport()
-    qio1 = Qio(broker=broker1, transport=transport1)
+    qio1 = Qio(broker=broker1, transport=transport1, default_queue="qio")
 
     broker2 = StubBroker()
     transport2 = StubTransport()
-    qio2 = Qio(broker=broker2, transport=transport2)
+    qio2 = Qio(broker=broker2, transport=transport2, default_queue="qio")
 
     try:
         # Both should work independently

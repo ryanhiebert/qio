@@ -31,9 +31,12 @@ from .transport import Transport
 
 
 class Qio:
-    def __init__(self, *, broker: Broker, transport: Transport):
+    def __init__(
+        self, *, broker: Broker, transport: Transport, default_queue: str = "default"
+    ):
         self.__bus = Bus(transport)
         self.__broker = broker
+        self.__default_queue = default_queue
         self.__invocations = dict[Invocation, Message]()
 
     def run[R](self, invocation: Invocation[R], /) -> R:
@@ -103,7 +106,8 @@ class Qio:
                 kwargs=invocation.kwargs,
             )
         )
-        self.__broker.enqueue(serialize(invocation), queue=routine.queue)
+        queue = routine.queue if routine.queue is not None else self.__default_queue
+        self.__broker.enqueue(serialize(invocation), queue=queue)
 
     def consume(self, *, queue: str, prefetch: int) -> Generator[Invocation]:
         for message in self.__broker.consume(queue=queue, prefetch=prefetch):

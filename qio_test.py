@@ -16,7 +16,9 @@ def test_integration():
     # Prefers a clean environment and queue
     connection_params = ConnectionParameters()
     qio = Qio(
-        broker=PikaBroker(connection_params), transport=PikaTransport(connection_params)
+        broker=PikaBroker(connection_params),
+        transport=PikaTransport(connection_params),
+        default_queue="qio",
     )
 
     try:

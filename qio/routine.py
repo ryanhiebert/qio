@@ -4,7 +4,7 @@ from .invocation import Invocation
 
 
 class Routine[**A, R]:
-    def __init__(self, fn: Callable[A, R], *, name: str, queue: str):
+    def __init__(self, fn: Callable[A, R], *, name: str, queue: str | None = None):
         self.fn = fn
         self.name = name
         self.queue = queue
