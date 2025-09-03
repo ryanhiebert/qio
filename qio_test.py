@@ -29,7 +29,7 @@ def test_integration():
 
         # 1. Start worker process in the background
         worker = subprocess.Popen(
-            [sys.executable, "-m", "qio", "worker"],
+            [sys.executable, "-m", "qio", "worker", "qio=3"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )

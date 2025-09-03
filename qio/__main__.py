@@ -1,7 +1,9 @@
 from contextlib import suppress
 from time import sleep as time_sleep
+from typing import Annotated
 
 from pika import ConnectionParameters
+from typer import Argument
 from typer import Typer
 
 from . import routine
@@ -10,6 +12,7 @@ from .monitor import Monitor
 from .pika.broker import PikaBroker
 from .pika.transport import PikaTransport
 from .qio import Qio
+from .queuespec import QueueSpec
 from .sleep import sleep
 from .worker import Worker
 
@@ -92,14 +95,29 @@ def monitor(raw: bool = False):
 
 
 @app.command()
-def worker():
+def worker(
+    queuespec: Annotated[
+        QueueSpec,
+        Argument(
+            parser=QueueSpec.parse,
+            help="Queue configuration in format 'queue=concurrency'. "
+            "Examples: 'production=10', 'api,background=5'",
+            metavar="QUEUE[,QUEUE2,...]=CONCURRENCY",
+        ),
+    ],
+):
+    """Start a worker process for the specified queue and concurrency.
+
+    The worker will process invocations from the specified queue,
+    as many at a time as specified by the concurrency.
+    """
     connection_params = ConnectionParameters()
     qio = Qio(
         broker=PikaBroker(connection_params),
         transport=PikaTransport(connection_params),
         default_queue="qio",
     )
-    Worker(qio, queue="qio", concurrency=3)()
+    Worker(qio, queuespec)()
 
 
 @app.command()

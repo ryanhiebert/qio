@@ -13,20 +13,29 @@ from .continuation import ThrowContinuation
 from .invocation import Invocation
 from .invocation import LocalInvocationSuspended
 from .qio import Qio
+from .queuespec import QueueSpec
 from .thread import Thread
 
 
 class Worker:
-    def __init__(self, qio: Qio, *, queue: str, concurrency: int):
+    def __init__(self, qio: Qio, queuespec: QueueSpec):
         self.__qio = qio
+
+        if not queuespec.queues:
+            raise ValueError("No queues specified in queuespec")
+        if len(queuespec.queues) != 1:
+            raise ValueError("Only one queue is supported")
+
         self.__tasks = Queue[Invocation | SendContinuation | ThrowContinuation]()
-        self.__consumer = self.__qio.consume(queue=queue, prefetch=concurrency)
+        self.__consumer = self.__qio.consume(
+            queue=queuespec.queues[0], prefetch=queuespec.concurrency
+        )
         self.__continuer_events = self.__qio.subscribe({LocalInvocationSuspended})
 
         # Start threads event queues are created
         self.__runner_threads = [
             Thread(target=self.__runner, name=f"qio-runner-{i + 1}")
-            for i in range(concurrency)
+            for i in range(queuespec.concurrency)
         ]
         self.__continuer_thread = Thread(target=self.__continuer, name="qio-continuer")
         self.__receiver_thread = Thread(target=self.__receiver, name="qio-receiver")
