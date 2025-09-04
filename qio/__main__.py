@@ -26,7 +26,7 @@ def regular(instance: int, iterations: int):
     return f"Instance {instance} completed"
 
 
-@routine(name="raises")
+@routine(name="raises", queue="qio")
 def raises():
     raise ValueError("This is a test exception")
 
@@ -65,7 +65,6 @@ def submit():
     qio = Qio(
         broker=PikaBroker(connection_params),
         transport=PikaTransport(connection_params),
-        default_queue="qio",
     )
     try:
         qio.submit(irregular())
@@ -80,7 +79,6 @@ def monitor(raw: bool = False):
         qio = Qio(
             broker=PikaBroker(connection_params),
             transport=PikaTransport(connection_params),
-            default_queue="qio",
         )
         events = qio.subscribe({object})
         try:
@@ -115,7 +113,6 @@ def worker(
     qio = Qio(
         broker=PikaBroker(connection_params),
         transport=PikaTransport(connection_params),
-        default_queue="qio",
     )
     Worker(qio, queuespec)()
 
@@ -126,7 +123,6 @@ def purge():
     qio = Qio(
         broker=PikaBroker(connection_params),
         transport=PikaTransport(connection_params),
-        default_queue="qio",
     )
     try:
         qio.purge(queue="qio")

@@ -5,7 +5,7 @@ from .routine import Routine
 ROUTINE_REGISTRY: dict[str, Routine] = {}
 
 
-def routine(*, name: str, queue: str | None = None):
+def routine(*, name: str, queue: str):
     """Decorate a function to make it a routine."""
 
     def create_routine[**A, R](fn: Callable[A, R]) -> Routine[A, R]:

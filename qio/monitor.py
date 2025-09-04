@@ -32,7 +32,6 @@ class Monitor(App):
         self.__qio = Qio(
             broker=PikaBroker(connection_params),
             transport=PikaTransport(connection_params),
-            default_queue="qio",
         )
         self.__thread = Thread(target=self.__listen)
         self.__events = self.__qio.subscribe(
@@ -75,7 +74,7 @@ class Monitor(App):
                     event.invocation_id,
                     event.routine,
                     "Submitted",
-                    self.__qio.routine(event.routine).queue or "qio",
+                    self.__qio.routine(event.routine).queue,
                     key=event.invocation_id,
                 )
             case InvocationStarted():
