@@ -21,15 +21,8 @@ class Worker:
     def __init__(self, qio: Qio, queuespec: QueueSpec):
         self.__qio = qio
 
-        if not queuespec.queues:
-            raise ValueError("No queues specified in queuespec")
-        if len(queuespec.queues) != 1:
-            raise ValueError("Only one queue is supported")
-
         self.__tasks = Queue[Invocation | SendContinuation | ThrowContinuation]()
-        self.__consumer = self.__qio.consume(
-            queue=queuespec.queues[0], prefetch=queuespec.concurrency
-        )
+        self.__consumer = self.__qio.consume(queuespec)
         self.__continuer_events = self.__qio.subscribe({LocalInvocationSuspended})
 
         # Start threads event queues are created

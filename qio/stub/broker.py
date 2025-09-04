@@ -6,6 +6,7 @@ from queue import ShutDown
 
 from qio.broker import Broker
 from qio.broker import Message
+from qio.queuespec import QueueSpec
 
 
 class StubBroker(Broker):
@@ -21,7 +22,14 @@ class StubBroker(Broker):
     def purge(self, *, queue: str):
         self.__queues[queue] = Queue[bytes]()
 
-    def consume(self, *, queue: str, prefetch: int) -> Iterator[Message]:
+    def consume(self, queuespec: QueueSpec, /) -> Iterator[Message]:
+        if not queuespec.queues:
+            raise ValueError("QueueSpec must have at least one queue")
+        if len(queuespec.queues) != 1:
+            raise ValueError("Only one queue is supported")
+
+        queue = queuespec.queues[0]
+        prefetch = queuespec.concurrency
         consumer = _Consumer(self.__queues[queue], prefetch)
 
         for payload in consumer:

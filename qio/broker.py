@@ -3,6 +3,8 @@ from abc import abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass
 
+from .queuespec import QueueSpec
+
 
 @dataclass(eq=False, frozen=True)
 class Message:
@@ -25,7 +27,7 @@ class Broker(ABC):
         raise NotImplementedError("Subclasses must implement this method.")
 
     @abstractmethod
-    def consume(self, *, queue: str, prefetch: int) -> Iterator[Message]:
+    def consume(self, queuespec: QueueSpec, /) -> Iterator[Message]:
         """Consume messages from the queue."""
         raise NotImplementedError("Subclasses must implement this method.")
 

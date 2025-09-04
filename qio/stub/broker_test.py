@@ -1,5 +1,9 @@
 import threading
 
+import pytest
+
+from qio.queuespec import QueueSpec
+
 from .broker import StubBroker
 
 
@@ -16,7 +20,8 @@ def test_prefetch_limits_message_consumption():
     prefetch_limit = 2
 
     def consume_messages():
-        consumer = broker.consume(queue="test-queue", prefetch=prefetch_limit)
+        queuespec = QueueSpec(queues=["test-queue"], concurrency=prefetch_limit)
+        consumer = broker.consume(queuespec)
         for message in consumer:
             consumed_messages.append(message)
             # Don't call start() - this should block after prefetch_limit messages
@@ -47,7 +52,8 @@ def test_suspend_resume_affects_prefetch_capacity():
     prefetch_limit = 2
 
     def consume_messages():
-        consumer = broker.consume(queue="test-queue", prefetch=prefetch_limit)
+        queuespec = QueueSpec(queues=["test-queue"], concurrency=prefetch_limit)
+        consumer = broker.consume(queuespec)
         for message in consumer:
             consumed_messages.append(message)
             broker.start(message)
@@ -84,7 +90,8 @@ def test_complete_message_frees_prefetch_capacity():
     prefetch_limit = 2
 
     def consume_messages():
-        consumer = broker.consume(queue="test-queue", prefetch=prefetch_limit)
+        queuespec = QueueSpec(queues=["test-queue"], concurrency=prefetch_limit)
+        consumer = broker.consume(queuespec)
         for message in consumer:
             consumed_messages.append(message)
             broker.start(message)
@@ -123,13 +130,15 @@ def test_multiple_consumers_independent_prefetch_limits():
     consumer2_messages = []
 
     def consume_with_limit_2():
-        consumer = broker.consume(queue="test-queue", prefetch=2)
+        queuespec = QueueSpec(queues=["test-queue"], concurrency=2)
+        consumer = broker.consume(queuespec)
         for message in consumer:
             consumer1_messages.append(message)
             broker.start(message)
 
     def consume_with_limit_3():
-        consumer = broker.consume(queue="test-queue", prefetch=3)
+        queuespec = QueueSpec(queues=["test-queue"], concurrency=3)
+        consumer = broker.consume(queuespec)
         for message in consumer:
             consumer2_messages.append(message)
             broker.start(message)
@@ -149,5 +158,27 @@ def test_multiple_consumers_independent_prefetch_limits():
     assert total_consumed == 5  # All messages consumed (2+3=5)
     assert thread1.is_alive()  # Both should be blocked
     assert thread2.is_alive()
+
+    broker.shutdown()
+
+
+def test_consume_rejects_empty_queues():
+    """Verify broker rejects QueueSpec with no queues."""
+    broker = StubBroker()
+    queuespec = QueueSpec(queues=[], concurrency=2)
+
+    with pytest.raises(ValueError, match="QueueSpec must have at least one queue"):
+        list(broker.consume(queuespec))
+
+    broker.shutdown()
+
+
+def test_consume_rejects_multiple_queues():
+    """Verify broker rejects QueueSpec with multiple queues."""
+    broker = StubBroker()
+    queuespec = QueueSpec(queues=["queue1", "queue2"], concurrency=2)
+
+    with pytest.raises(ValueError, match="Only one queue is supported"):
+        list(broker.consume(queuespec))
 
     broker.shutdown()

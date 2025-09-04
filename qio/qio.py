@@ -23,6 +23,7 @@ from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
 from .invocation import deserialize
 from .invocation import serialize
+from .queuespec import QueueSpec
 from .registry import ROUTINE_REGISTRY
 from .routine import Routine
 from .suspension import Suspension
@@ -106,8 +107,8 @@ class Qio:
         queue = routine.queue
         self.__broker.enqueue(serialize(invocation), queue=queue)
 
-    def consume(self, *, queue: str, prefetch: int) -> Generator[Invocation]:
-        for message in self.__broker.consume(queue=queue, prefetch=prefetch):
+    def consume(self, queuespec: QueueSpec, /) -> Generator[Invocation]:
+        for message in self.__broker.consume(queuespec):
             invocation = deserialize(message.body)
             self.__invocations[invocation] = message
             yield invocation

@@ -10,6 +10,7 @@ from pika import URLParameters
 
 from qio.broker import Broker
 from qio.broker import Message
+from qio.queuespec import QueueSpec
 
 
 class PikaBroker(Broker):
@@ -36,7 +37,15 @@ class PikaBroker(Broker):
             self.__producer_channel.queue_declare(queue=queue, durable=True)
             self.__producer_channel.queue_purge(queue=queue)
 
-    def consume(self, *, queue: str, prefetch: int) -> Iterator[Message]:
+    def consume(self, queuespec: QueueSpec, /) -> Iterator[Message]:
+        if not queuespec.queues:
+            raise ValueError("QueueSpec must have at least one queue")
+        if len(queuespec.queues) != 1:
+            raise ValueError("Only one queue is supported")
+
+        queue = queuespec.queues[0]
+        prefetch = queuespec.concurrency
+
         consumer = _Consumer(
             connection_params=self.__connection_params,
             queue=queue,
