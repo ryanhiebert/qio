@@ -104,7 +104,7 @@ def worker(
         ),
     ],
 ):
-    """Start a worker process for the specified queue and concurrency.
+    """Start a worker to process from a queue.
 
     The worker will process invocations from the specified queue,
     as many at a time as specified by the concurrency.
@@ -118,14 +118,37 @@ def worker(
 
 
 @app.command()
-def purge():
+def purge(
+    queues: Annotated[
+        str,
+        Argument(
+            help="Comma-separated list of queues to purge. "
+            "Examples: 'qio', 'production,background'",
+            metavar="QUEUE[,QUEUE2,...]",
+        ),
+    ],
+):
+    """Purge all messages from some queues.
+
+    This will remove all pending messages from the given queues.
+    Use with caution as this operation cannot be undone.
+    """
     connection_params = ConnectionParameters()
     qio = Qio(
         broker=PikaBroker(connection_params),
         transport=PikaTransport(connection_params),
     )
     try:
-        qio.purge(queue="qio")
+        queue_list = [q.strip() for q in queues.split(",") if q.strip()]
+        if not queue_list:
+            print("Error: No valid queue names provided")
+            return
+
+        for queue in queue_list:
+            print(f"Purging queue: {queue}")
+            qio.purge(queue=queue)
+
+        print(f"Successfully purged {len(queue_list)} queue(s)")
     finally:
         qio.shutdown()
 
