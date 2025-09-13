@@ -25,8 +25,13 @@ class SwapQueue[L, R]:
         self.__left = deque[tuple[SelectorGuard[R], L]]()
         self.__right = deque[tuple[SelectorGuard[L], R]]()
 
-    @selectmethod
-    def left(self, guard: SelectorGuard[R], value: L):
+    def __swap[I, O](
+        self,
+        queue: deque[tuple[SelectorGuard[O], I]],
+        other_queue: deque[tuple[SelectorGuard[I], O]],
+        guard: SelectorGuard[O],
+        value: I,
+    ):
         with self.__lock:
             if self.__shutdown:
                 with guard as selector:
@@ -35,47 +40,29 @@ class SwapQueue[L, R]:
                     return
 
             with ExitStack() as stack:
-                while self.__right:
-                    other_guard, other_value = self.__right.popleft()
+                while other_queue:
+                    other_guard, other_value = other_queue.popleft()
                     if guard.collides(other_guard):
                         raise Collision()
                     other_selector = stack.enter_context(other_guard)
                     if other_selector:
                         break
                 else:
-                    self.__left.append((guard, value))
+                    queue.append((guard, value))
                     return
 
                 with guard as selector:
                     if selector:
                         selector.result(other_value)
                         other_selector.result(value)
+
+    @selectmethod
+    def left(self, guard: SelectorGuard[R], value: L):
+        self.__swap(self.__left, self.__right, guard, value)
 
     @selectmethod
     def right(self, guard: SelectorGuard[L], value: R):
-        with self.__lock:
-            if self.__shutdown:
-                with guard as selector:
-                    if selector:
-                        selector.error(ShutDown())
-                    return
-
-            with ExitStack() as stack:
-                while self.__left:
-                    other_guard, other_value = self.__left.popleft()
-                    if guard.collides(other_guard):
-                        raise Collision()
-                    other_selector = stack.enter_context(other_guard)
-                    if other_selector:
-                        break
-                else:
-                    self.__right.append((guard, value))
-                    return
-
-                with guard as selector:
-                    if selector:
-                        selector.result(other_value)
-                        other_selector.result(value)
+        self.__swap(self.__right, self.__left, guard, value)
 
     def shutdown(self):
         with self.__lock:
