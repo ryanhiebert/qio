@@ -31,7 +31,8 @@ class SwapQueue[L, R]:
         with self.__lock:
             if self.__shutdown:
                 with guard as selector:
-                    selector.error(ShutDown())
+                    if selector:
+                        selector.error(ShutDown())
                     return
 
             with ExitStack() as stack:
@@ -40,14 +41,15 @@ class SwapQueue[L, R]:
                     if guard.collides(other_guard):
                         raise Collision()
                     other_selector = stack.enter_context(other_guard)
-                    if not other_selector.abandoned():
+                    if other_selector:
                         break
                 else:
                     self.__left.append((guard, value))
                     return
 
                 with guard as selector:
-                    if selector.result(other_value):
+                    if selector:
+                        selector.result(other_value)
                         other_selector.result(value)
 
     @selectmethod
@@ -55,7 +57,8 @@ class SwapQueue[L, R]:
         with self.__lock:
             if self.__shutdown:
                 with guard as selector:
-                    selector.error(ShutDown())
+                    if selector:
+                        selector.error(ShutDown())
                     return
 
             with ExitStack() as stack:
@@ -64,14 +67,15 @@ class SwapQueue[L, R]:
                     if guard.collides(other_guard):
                         raise Collision()
                     other_selector = stack.enter_context(other_guard)
-                    if not other_selector.abandoned():
+                    if other_selector:
                         break
                 else:
                     self.__right.append((guard, value))
                     return
 
                 with guard as selector:
-                    if selector.result(other_value):
+                    if selector:
+                        selector.result(other_value)
                         other_selector.result(value)
 
     def shutdown(self):
@@ -81,7 +85,8 @@ class SwapQueue[L, R]:
             self.__left, self.__right = deque(), deque()
             for guard, _ in chain(left, right):
                 with guard as selector:
-                    selector.error(ShutDown())
+                    if selector:
+                        selector.error(ShutDown())
 
 
 class SyncQueue[T]:
@@ -117,12 +122,13 @@ class Queue[T]:
         with self.__lock:
             if self.__shutdown:
                 with guard as selector:
-                    selector.error(ShutDown())
+                    if selector:
+                        selector.error(ShutDown())
                     return
 
             if self.__queue:
                 with guard as selector:
-                    if not selector.abandoned():
+                    if selector:
                         value = self.__queue.popleft()
                         selector.result(value)
             else:
@@ -133,7 +139,8 @@ class Queue[T]:
             ):
                 other_guard, other_value = self.__putters.popleft()
                 with other_guard as other_selector:
-                    if other_selector.result(None):
+                    if other_selector:
+                        other_selector.result(None)
                         self.__queue.append(other_value)
 
     @selectmethod
@@ -142,12 +149,14 @@ class Queue[T]:
         with self.__lock:
             if self.__shutdown:
                 with guard as selector:
-                    selector.error(ShutDown())
+                    if selector:
+                        selector.error(ShutDown())
                     return
 
             if not self.__maxsize or len(self.__queue) < self.__maxsize:
                 with guard as selector:
-                    if selector.result(None):
+                    if selector:
+                        selector.result(None)
                         self.__queue.append(value)
             else:
                 self.__putters.append((guard, value))
@@ -156,7 +165,9 @@ class Queue[T]:
                 other_guard, other_value = self.__getters.popleft()
                 queue_value = self.__queue.popleft()
                 with other_guard as other_selector:
-                    if not other_selector.result(queue_value):
+                    if other_selector:
+                        other_selector.result(queue_value)
+                    else:
                         self.__getters.appendleft((other_guard, other_value))
                         self.__queue.appendleft(queue_value)
 
@@ -168,4 +179,5 @@ class Queue[T]:
             self.__getters.clear()
             for guard, _ in chain(putters, getters):
                 with guard as selector:
-                    selector.error(ShutDown())
+                    if selector:
+                        selector.error(ShutDown())

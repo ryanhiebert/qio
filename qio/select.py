@@ -14,33 +14,32 @@ from typing import cast
 
 class Selector[R = None](ABC):
     @abstractmethod
-    def result(self, item: R, /) -> bool:
+    def result(self, item: R, /) -> None:
         """Give the result of the selected operation."""
         raise NotImplementedError
 
     @abstractmethod
-    def error(self, error: Exception, /) -> bool:
+    def error(self, error: Exception, /) -> None:
         """Give the error from the selected operation."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def abandoned(self) -> bool:
-        """Indicate that the selected operation was abandoned."""
         raise NotImplementedError
 
 
 class SelectorGuard[R](AbstractContextManager[Selector[R]], ABC):
     @abstractmethod
-    def __enter__(self) -> Selector[R]:
+    def __enter__(self) -> Selector[R] | None:
         raise NotImplementedError
 
     @abstractmethod
     def collides(self, other: SelectorGuard) -> bool:
-        """Check if this guard would collide with another guard."""
+        """Check if this guard collides with another guard."""
         raise NotImplementedError
 
 
 class NotGiven(Exception):
+    pass
+
+
+class AlreadyGiven(Exception):
     pass
 
 
@@ -59,23 +58,21 @@ class Selection[T, R]:
         self.__item: R | None = None
         self.__error: Exception | None = None
 
-    def give(self, token: T, item: R, /) -> bool:
+    def give(self, token: T, item: R, /):
         with self.__lock:
             if self.__given:
-                return False
+                raise AlreadyGiven
             self.__token = token
             self.__item = item
             self.__given = True
-        return True
 
-    def error(self, token: T, error: Exception) -> bool:
+    def error(self, token: T, error: Exception):
         with self.__lock:
             if self.__given:
-                return False
+                raise AlreadyGiven
             self.__token = token
             self.__error = error
             self.__given = True
-        return True
 
     def take(self) -> tuple[T, R]:
         with self.__lock:
@@ -97,14 +94,11 @@ class SelectionSelector[T, R](Selector[R]):
         self.__token = token
         self.__selection = selection
 
-    def result(self, item: R, /) -> bool:
-        return self.__selection.give(self.__token, item)
+    def result(self, item: R, /):
+        self.__selection.give(self.__token, item)
 
-    def error(self, error: Exception, /) -> bool:
-        return self.__selection.error(self.__token, error)
-
-    def abandoned(self) -> bool:
-        return self.__selection.given()
+    def error(self, error: Exception, /):
+        self.__selection.error(self.__token, error)
 
 
 class SelectionSelectorGuard[T, R](SelectorGuard[R]):
@@ -118,8 +112,10 @@ class SelectionSelectorGuard[T, R](SelectorGuard[R]):
         self.__condition = condition
         self.__selection = selection
 
-    def __enter__(self) -> Selector[R]:
+    def __enter__(self) -> Selector[R] | None:
         self.__condition.__enter__()
+        if self.__selection.given():
+            return None
         return SelectionSelector(self.__token, self.__selection)
 
     def __exit__(self, *args, **kwargs):
