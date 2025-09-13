@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
+from collections.abc import Callable
 from collections.abc import Iterable
 from contextlib import AbstractContextManager
+from functools import update_wrapper
 from threading import Condition
 from threading import Lock
+from typing import Concatenate
 from typing import cast
 
 
@@ -34,13 +37,6 @@ class SelectorGuard[R](AbstractContextManager[Selector[R]], ABC):
     @abstractmethod
     def collides(self, other: SelectorGuard) -> bool:
         """Check if this guard would collide with another guard."""
-        raise NotImplementedError
-
-
-class Selectable[R](ABC):
-    @abstractmethod
-    def __select__(self, guard: SelectorGuard[R], /):
-        """Register a selector for the operation that created this selectable."""
         raise NotImplementedError
 
 
@@ -138,13 +134,41 @@ class SelectionSelectorGuard[T, R](SelectorGuard[R]):
         )
 
 
-def select[R](selectables: Iterable[Selectable[R]]) -> tuple[int, R]:
-    """Simultaneously wait multiple selectables and complete exactly one."""
+def select[R](selectors: Iterable[Callable[[SelectorGuard[R]], None]]) -> tuple[int, R]:
+    """Simultaneously wait multiple selector functions and complete exactly one."""
     selection = Selection[int, R]()
     with (condition := Condition()):
-        for i, selectable in enumerate(selectables):
+        for i, selector_fn in enumerate(selectors):
             guard = SelectionSelectorGuard(i, condition, selection)
-            selectable.__select__(guard)
+            selector_fn(guard)
         while not selection.given():
             condition.wait()
         return selection.take()
+
+
+class selectfunction[**P, R]:
+    def __init__(self, fn: Callable[Concatenate[SelectorGuard[R], P], None]):
+        self.__fn = fn
+        update_wrapper(self, fn)
+
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
+        return select([self.select(*args, **kwargs)])[1]
+
+    def __repr__(self):
+        return f"<selectfunction of {self.__fn!r}>"
+
+    def select(
+        self, *args: P.args, **kwargs: P.kwargs
+    ) -> Callable[[SelectorGuard[R]], None]:
+        return lambda guard: self.__fn(guard, *args, **kwargs)
+
+
+class selectmethod[**P, R, T]:
+    def __init__(self, fn: Callable[Concatenate[T, SelectorGuard[R], P], None]):
+        self.__fn = fn
+
+    def __get__(self, obj: T | None, objtype: type[T]) -> selectfunction[P, R]:
+        return selectfunction(self.__fn.__get__(obj, objtype))
+
+    def __repr__(self):
+        return f"<selectmethod of {self.__fn!r}>"

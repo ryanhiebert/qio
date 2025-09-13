@@ -18,11 +18,11 @@ class TestQueue:
 
         # Fill the queue to capacity
         def initial_putter(value: str):
-            index, result = select([queue.put_select(value)])
+            index, result = select([queue.put.select(value)])
             return result
 
         def initial_getter():
-            index, result = select([queue.get_select()])
+            index, result = select([queue.get.select()])
             return result
 
         # Fill up the queue first
@@ -39,7 +39,7 @@ class TestQueue:
 
         # Now queue is full (maxsize=2). Try to put another item - should block
         def blocked_putter():
-            index, result = select([queue.put_select("item3")])
+            index, result = select([queue.put.select("item3")])
             return result
 
         blocked_thread = Thread(target=blocked_putter)
@@ -86,7 +86,7 @@ class TestQueue:
         def put_many_unbounded():
             results = []
             for i in range(10):
-                index, result = select([unbounded.put_select(f"item{i}")])
+                index, result = select([unbounded.put.select(f"item{i}")])
                 results.append(result)
             return results
 
@@ -103,7 +103,7 @@ class TestQueue:
         def get_all():
             items = []
             for _ in range(10):
-                index, result = select([unbounded.get_select()])
+                index, result = select([unbounded.get.select()])
                 items.append(result)
             return items
 
@@ -131,14 +131,14 @@ class TestQueue:
             results = []
             for i in range(items_per_producer):
                 item = f"producer{producer_id}_item{i}"
-                index, result = select([queue.put_select(item)])
+                index, result = select([queue.put.select(item)])
                 results.append((item, result))
             return results
 
         def consumer(consumer_id: int):
             items = []
             for _ in range(items_per_consumer):
-                index, result = select([queue.get_select()])
+                index, result = select([queue.get.select()])
                 items.append(result)
             return items
 
@@ -202,11 +202,11 @@ class TestQueue:
         queue.shutdown()
 
         def put_after_shutdown():
-            index, result = select([queue.put_select("after")])
+            index, result = select([queue.put.select("after")])
             return result
 
         def get_after_shutdown():
-            index, result = select([queue.get_select()])
+            index, result = select([queue.get.select()])
             return result
 
         put_thread = Thread(target=put_after_shutdown)
@@ -231,12 +231,12 @@ class TestSwapQueue:
         queue = SwapQueue[str, int]()
 
         def left_side():
-            index, result = select([queue.left("hello")])
+            index, result = select([queue.left.select("hello")])
             return result
 
         def right_side():
             time.sleep(0.1)  # Ensure left side waits first
-            index, result = select([queue.right(42)])
+            index, result = select([queue.right.select(42)])
             return result
 
         t1 = Thread(target=left_side)
@@ -258,15 +258,15 @@ class TestSwapQueue:
         queue = SwapQueue[str, int]()
 
         def left_before_shutdown():
-            index, result = select([queue.left("before")])
+            index, result = select([queue.left.select("before")])
             return result
 
         def left_after_shutdown():
-            index, result = select([queue.left("after_left")])
+            index, result = select([queue.left.select("after_left")])
             return result
 
         def right_after_shutdown():
-            index, result = select([queue.right(99)])
+            index, result = select([queue.right.select(99)])
             return result
 
         # Start first thread before shutdown
@@ -309,11 +309,11 @@ class TestSwapQueue:
         right_values = [1, 2, 3]
 
         def left_side(value: str):
-            index, result = select([queue.left(value)])
+            index, result = select([queue.left.select(value)])
             return result
 
         def right_side(value: int):
-            index, result = select([queue.right(value)])
+            index, result = select([queue.right.select(value)])
             return result
 
         # Start all threads
@@ -353,12 +353,17 @@ class TestSwapQueue:
 
         def multi_queue_left():
             # This will select on multiple queues - only one will succeed
-            index, result = select([queue1.left("hello"), queue2.left("world")])
+            index, result = select(
+                [
+                    queue1.left.select("hello"),
+                    queue2.left.select("world"),
+                ]
+            )
             return index, result
 
         def complete_queue1():
             # This completes the swap on queue1
-            index, result = select([queue1.right(42)])
+            index, result = select([queue1.right.select(42)])
             return result
 
         # Start the multi-queue selector first
@@ -386,11 +391,11 @@ class TestSwapQueue:
 
         # Now test that queue2 still works despite having an abandoned selector
         def use_queue2():
-            index, result = select([queue2.left("test")])
+            index, result = select([queue2.left.select("test")])
             return result
 
         def complete_queue2():
-            index, result = select([queue2.right(99)])
+            index, result = select([queue2.right.select(99)])
             return result
 
         # Start operations on queue2
@@ -414,7 +419,12 @@ class TestSwapQueue:
 
         def self_swap():
             # Try to select on both sides of the same queue
-            index, result = select([queue.left("hello"), queue.right("world")])
+            index, result = select(
+                [
+                    queue.left.select("hello"),
+                    queue.right.select("world"),
+                ]
+            )
             return index, result
 
         thread = Thread(target=self_swap)
@@ -427,7 +437,12 @@ class TestSwapQueue:
 
         # Test with reversed order too
         def self_swap_reversed():
-            index, result = select([queue.right("world"), queue.left("hello")])
+            index, result = select(
+                [
+                    queue.right.select("world"),
+                    queue.left.select("hello"),
+                ]
+            )
             return index, result
 
         thread2 = Thread(target=self_swap_reversed)
@@ -444,12 +459,12 @@ class TestSyncQueue:
         queue = SyncQueue[str]()
 
         def putter():
-            index, result = select([queue.put_select("hello")])
+            index, result = select([queue.put.select("hello")])
             return result
 
         def getter():
             time.sleep(0.1)  # Ensure putter waits first
-            index, result = select([queue.get_select()])
+            index, result = select([queue.get.select()])
             return result
 
         t1 = Thread(target=putter)
@@ -470,7 +485,7 @@ class TestSyncQueue:
         queue = SyncQueue[str]()
 
         def put_before_shutdown():
-            index, result = select([queue.put_select("before")])
+            index, result = select([queue.put.select("before")])
             return result
 
         # Start thread before shutdown
@@ -494,13 +509,13 @@ class TestSyncQueue:
         """Verify SyncQueue methods are proper wrappers around SwapQueue."""
         queue = SyncQueue[int]()
 
-        # The methods should return the same type of selectables
-        put_selectable = queue.put_select(42)
-        get_selectable = queue.get_select()
+        # The methods should return callables (same as SwapQueue returns)
+        put_callable = queue.put.select(42)
+        get_callable = queue.get.select()
 
-        # These should be QueueSelectable instances (same as SwapQueue returns)
-        assert hasattr(put_selectable, "__select__")
-        assert hasattr(get_selectable, "__select__")
+        # These should be callable functions
+        assert callable(put_callable)
+        assert callable(get_callable)
 
     def test_type_safety(self):
         """Verify type consistency in SyncQueue operations."""
@@ -508,12 +523,12 @@ class TestSyncQueue:
 
         def putter():
             # Should accept str and return None
-            index, result = select([queue.put_select("test")])
+            index, result = select([queue.put.select("test")])
             return result
 
         def getter():
             # Should return str
-            index, result = select([queue.get_select()])
+            index, result = select([queue.get.select()])
             return result
 
         put_thread = Thread(target=putter)

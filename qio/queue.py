@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Callable
 from contextlib import ExitStack
 from itertools import chain
 from threading import Lock
 
-from .select import Selectable
 from .select import SelectorGuard
+from .select import selectmethod
 
 
 class ShutDown(Exception):
@@ -16,14 +15,6 @@ class ShutDown(Exception):
 
 class Collision(Exception):
     """Selectors from the same selection collided."""
-
-
-class QueueSelectable[T = None](Selectable[T]):
-    def __init__(self, fn: Callable[[SelectorGuard[T]]], /):
-        self.__fn = fn
-
-    def __select__(self, guard: SelectorGuard[T], /):
-        self.__fn(guard)
 
 
 class SwapQueue[L, R]:
@@ -35,59 +26,53 @@ class SwapQueue[L, R]:
         self.__left = deque[tuple[SelectorGuard[R], L]]()
         self.__right = deque[tuple[SelectorGuard[L], R]]()
 
-    def left(self, value: L) -> QueueSelectable[R]:
-        @QueueSelectable[R]
-        def left(guard: SelectorGuard[R]):
-            with self.__lock:
-                if self.__shutdown:
-                    with guard as selector:
-                        selector.error(ShutDown())
-                        return
+    @selectmethod
+    def left(self, guard: SelectorGuard[R], value: L):
+        with self.__lock:
+            if self.__shutdown:
+                with guard as selector:
+                    selector.error(ShutDown())
+                    return
 
-                with ExitStack() as stack:
-                    while self.__right:
-                        other_guard, other_value = self.__right.popleft()
-                        if guard.collides(other_guard):
-                            raise Collision()
-                        other_selector = stack.enter_context(other_guard)
-                        if not other_selector.abandoned():
-                            break
-                    else:
-                        self.__left.append((guard, value))
-                        return
+            with ExitStack() as stack:
+                while self.__right:
+                    other_guard, other_value = self.__right.popleft()
+                    if guard.collides(other_guard):
+                        raise Collision()
+                    other_selector = stack.enter_context(other_guard)
+                    if not other_selector.abandoned():
+                        break
+                else:
+                    self.__left.append((guard, value))
+                    return
 
-                    with guard as selector:
-                        if selector.result(other_value):
-                            other_selector.result(value)
+                with guard as selector:
+                    if selector.result(other_value):
+                        other_selector.result(value)
 
-        return left
+    @selectmethod
+    def right(self, guard: SelectorGuard[L], value: R):
+        with self.__lock:
+            if self.__shutdown:
+                with guard as selector:
+                    selector.error(ShutDown())
+                    return
 
-    def right(self, value: R) -> QueueSelectable[L]:
-        @QueueSelectable[L]
-        def right(guard: SelectorGuard[L]):
-            with self.__lock:
-                if self.__shutdown:
-                    with guard as selector:
-                        selector.error(ShutDown())
-                        return
+            with ExitStack() as stack:
+                while self.__left:
+                    other_guard, other_value = self.__left.popleft()
+                    if guard.collides(other_guard):
+                        raise Collision()
+                    other_selector = stack.enter_context(other_guard)
+                    if not other_selector.abandoned():
+                        break
+                else:
+                    self.__right.append((guard, value))
+                    return
 
-                with ExitStack() as stack:
-                    while self.__left:
-                        other_guard, other_value = self.__left.popleft()
-                        if guard.collides(other_guard):
-                            raise Collision()
-                        other_selector = stack.enter_context(other_guard)
-                        if not other_selector.abandoned():
-                            break
-                    else:
-                        self.__right.append((guard, value))
-                        return
-
-                    with guard as selector:
-                        if selector.result(other_value):
-                            other_selector.result(value)
-
-        return right
+                with guard as selector:
+                    if selector.result(other_value):
+                        other_selector.result(value)
 
     def shutdown(self):
         with self.__lock:
@@ -103,13 +88,15 @@ class SyncQueue[T]:
     def __init__(self):
         self.__swap_queue = SwapQueue[T, None]()
 
-    def get_select(self) -> QueueSelectable[T]:
+    @selectmethod
+    def get(self, guard: SelectorGuard[T]):
         """Obtain a selectable to get a value from the queue."""
-        return self.__swap_queue.right(None)
+        return self.__swap_queue.right.select(None)(guard)
 
-    def put_select(self, value: T) -> QueueSelectable:
+    @selectmethod
+    def put(self, guard: SelectorGuard[None], value: T):
         """Obtain a selectable to put the value on the queue."""
-        return self.__swap_queue.left(value)
+        return self.__swap_queue.left.select(value)(guard)
 
     def shutdown(self):
         self.__swap_queue.shutdown()
@@ -124,64 +111,54 @@ class Queue[T]:
         self.__putters = deque[tuple[SelectorGuard[None], T]]()
         self.__getters = deque[tuple[SelectorGuard[T], None]]()
 
-    def get_select(self) -> QueueSelectable[T]:
+    @selectmethod
+    def get(self, guard: SelectorGuard[T]):
         """Obtain a selectable to get a value from the queue."""
+        with self.__lock:
+            if self.__shutdown:
+                with guard as selector:
+                    selector.error(ShutDown())
+                    return
 
-        @QueueSelectable[T]
-        def get_select(guard: SelectorGuard[T]):
-            with self.__lock:
-                if self.__shutdown:
-                    with guard as selector:
-                        selector.error(ShutDown())
-                        return
+            if self.__queue:
+                with guard as selector:
+                    if not selector.abandoned():
+                        value = self.__queue.popleft()
+                        selector.result(value)
+            else:
+                self.__getters.append((guard, None))
 
-                if self.__queue:
-                    with guard as selector:
-                        if not selector.abandoned():
-                            value = self.__queue.popleft()
-                            selector.result(value)
-                else:
-                    self.__getters.append((guard, None))
+            while (
+                self.__maxsize and self.__putters and self.__maxsize > len(self.__queue)
+            ):
+                other_guard, other_value = self.__putters.popleft()
+                with other_guard as other_selector:
+                    if other_selector.result(None):
+                        self.__queue.append(other_value)
 
-                while (
-                    self.__maxsize
-                    and self.__putters
-                    and self.__maxsize > len(self.__queue)
-                ):
-                    other_guard, other_value = self.__putters.popleft()
-                    with other_guard as other_selector:
-                        if other_selector.result(None):
-                            self.__queue.append(other_value)
-
-        return get_select
-
-    def put_select(self, value: T) -> QueueSelectable:
+    @selectmethod
+    def put(self, guard: SelectorGuard[None], value: T):
         """Obtain a selectable to put the value on the queue."""
+        with self.__lock:
+            if self.__shutdown:
+                with guard as selector:
+                    selector.error(ShutDown())
+                    return
 
-        @QueueSelectable
-        def put_select(guard: SelectorGuard[None]):
-            with self.__lock:
-                if self.__shutdown:
-                    with guard as selector:
-                        selector.error(ShutDown())
-                        return
+            if not self.__maxsize or len(self.__queue) < self.__maxsize:
+                with guard as selector:
+                    if selector.result(None):
+                        self.__queue.append(value)
+            else:
+                self.__putters.append((guard, value))
 
-                if not self.__maxsize or len(self.__queue) < self.__maxsize:
-                    with guard as selector:
-                        if selector.result(None):
-                            self.__queue.append(value)
-                else:
-                    self.__putters.append((guard, value))
-
-                while self.__getters and self.__queue:
-                    other_guard, other_value = self.__getters.popleft()
-                    queue_value = self.__queue.popleft()
-                    with other_guard as other_selector:
-                        if not other_selector.result(queue_value):
-                            self.__getters.appendleft((other_guard, other_value))
-                            self.__queue.appendleft(queue_value)
-
-        return put_select
+            while self.__getters and self.__queue:
+                other_guard, other_value = self.__getters.popleft()
+                queue_value = self.__queue.popleft()
+                with other_guard as other_selector:
+                    if not other_selector.result(queue_value):
+                        self.__getters.appendleft((other_guard, other_value))
+                        self.__queue.appendleft(queue_value)
 
     def shutdown(self):
         with self.__lock:
