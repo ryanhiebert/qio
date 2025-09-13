@@ -1,6 +1,4 @@
 from collections.abc import Iterator
-from queue import Queue
-from queue import ShutDown
 from threading import Lock
 from threading import Thread
 from typing import cast
@@ -10,6 +8,9 @@ from pika import ConnectionParameters
 from pika import URLParameters
 
 from qio.transport import Transport
+
+from ..queue import Queue
+from ..queue import ShutDown
 
 
 class PikaTransport(Transport):

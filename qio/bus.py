@@ -1,11 +1,11 @@
 from collections.abc import Iterable
 from itertools import chain
-from queue import Queue
 from threading import Thread
 from typing import Any
 
 import dill
 
+from .queue import Queue
 from .transport import Transport
 
 

@@ -1,7 +1,7 @@
 from collections.abc import Iterator
-from queue import Queue
-from queue import ShutDown
 
+from qio.queue import Queue
+from qio.queue import ShutDown
 from qio.transport import Transport
 
 

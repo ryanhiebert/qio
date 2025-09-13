@@ -2,8 +2,6 @@ from collections.abc import Generator
 from collections.abc import Iterable
 from concurrent.futures import Future
 from contextlib import contextmanager
-from queue import Queue
-from queue import ShutDown
 from typing import Any
 
 from .broker import Broker
@@ -23,6 +21,8 @@ from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
 from .invocation import deserialize
 from .invocation import serialize
+from .queue import Queue
+from .queue import ShutDown
 from .queuespec import QueueSpec
 from .registry import ROUTINE_REGISTRY
 from .routine import Routine

@@ -1,5 +1,3 @@
-from queue import ShutDown
-
 from pika import ConnectionParameters
 from textual.app import App
 from textual.app import ComposeResult
@@ -18,6 +16,7 @@ from .invocation import InvocationThrew
 from .pika.broker import PikaBroker
 from .pika.transport import PikaTransport
 from .qio import Qio
+from .queue import ShutDown
 from .thread import Thread
 
 

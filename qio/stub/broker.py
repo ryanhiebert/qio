@@ -1,11 +1,11 @@
 import threading
 from collections import defaultdict
 from collections.abc import Iterator
-from queue import Queue
-from queue import ShutDown
 
 from qio.broker import Broker
 from qio.broker import Message
+from qio.queue import Queue
+from qio.queue import ShutDown
 from qio.queuespec import QueueSpec
 
 

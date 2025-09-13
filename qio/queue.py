@@ -98,7 +98,7 @@ class SyncQueue[T]:
 
 
 class Queue[T]:
-    def __init__(self, maxsize: int):
+    def __init__(self, maxsize: int = 0):
         self.__lock = Lock()
         self.__half_shutdown: bool = False
         self.__full_shutdown: bool = False

@@ -3,8 +3,6 @@ from concurrent.futures import FIRST_COMPLETED
 from concurrent.futures import Future
 from concurrent.futures import wait
 from contextlib import suppress
-from queue import Queue
-from queue import ShutDown
 from threading import Timer
 
 from .continuation import Continuation
@@ -13,6 +11,8 @@ from .continuation import ThrowContinuation
 from .invocation import Invocation
 from .invocation import LocalInvocationSuspended
 from .qio import Qio
+from .queue import Queue
+from .queue import ShutDown
 from .queuespec import QueueSpec
 from .thread import Thread
 
@@ -177,16 +177,13 @@ class Worker:
             except ShutDown:
                 break
 
-            try:
-                match task:
-                    case Invocation() as invocation:
-                        self.__qio.start(invocation)
-                        self.__run_invocation(invocation)
-                    case SendContinuation() | ThrowContinuation() as continuation:
-                        self.__qio.resume(continuation.invocation)
-                        self.__run_continuation(continuation)
-            finally:
-                self.__tasks.task_done()
+            match task:
+                case Invocation() as invocation:
+                    self.__qio.start(invocation)
+                    self.__run_invocation(invocation)
+                case SendContinuation() | ThrowContinuation() as continuation:
+                    self.__qio.resume(continuation.invocation)
+                    self.__run_continuation(continuation)
 
     def __run_invocation(self, invocation: Invocation):
         """Process an invocation task."""
