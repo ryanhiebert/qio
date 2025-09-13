@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import deque
 from contextlib import ExitStack
-from itertools import chain
 from threading import Lock
 
 from .select import SelectorGuard
@@ -81,9 +80,13 @@ class SwapQueue[L, R]:
     def shutdown(self):
         with self.__lock:
             self.__shutdown = True
-            left, right = self.__left, self.__right
-            self.__left, self.__right = deque(), deque()
-            for guard, _ in chain(left, right):
+            while self.__left:
+                guard, _ = self.__left.popleft()
+                with guard as selector:
+                    if selector:
+                        selector.error(ShutDown())
+            while self.__right:
+                guard, _ = self.__right.popleft()
                 with guard as selector:
                     if selector:
                         selector.error(ShutDown())
@@ -110,7 +113,8 @@ class SyncQueue[T]:
 class Queue[T]:
     def __init__(self, maxsize: int):
         self.__lock = Lock()
-        self.__shutdown: bool = False
+        self.__half_shutdown: bool = False
+        self.__full_shutdown: bool = False
         self.__maxsize = maxsize
         self.__queue = deque[T]()
         self.__putters = deque[tuple[SelectorGuard[None], T]]()
@@ -120,7 +124,7 @@ class Queue[T]:
     def get(self, guard: SelectorGuard[T]):
         """Obtain a selectable to get a value from the queue."""
         with self.__lock:
-            if self.__shutdown:
+            if self.__full_shutdown:
                 with guard as selector:
                     if selector:
                         selector.error(ShutDown())
@@ -133,6 +137,9 @@ class Queue[T]:
                         selector.result(value)
             else:
                 self.__getters.append((guard, None))
+
+            if not self.__queue and self.__half_shutdown:
+                self.__full_shutdown = True
 
             while (
                 self.__maxsize and self.__putters and self.__maxsize > len(self.__queue)
@@ -147,7 +154,7 @@ class Queue[T]:
     def put(self, guard: SelectorGuard[None], value: T):
         """Obtain a selectable to put the value on the queue."""
         with self.__lock:
-            if self.__shutdown:
+            if self.__half_shutdown:
                 with guard as selector:
                     if selector:
                         selector.error(ShutDown())
@@ -171,13 +178,19 @@ class Queue[T]:
                         self.__getters.appendleft((other_guard, other_value))
                         self.__queue.appendleft(queue_value)
 
-    def shutdown(self):
+    def shutdown(self, *, immediate: bool = False):
         with self.__lock:
-            self.__shutdown = True
-            putters, getters = self.__putters, self.__getters
-            self.__putters.clear()
-            self.__getters.clear()
-            for guard, _ in chain(putters, getters):
+            self.__half_shutdown = True
+            while self.__putters:
+                guard, _ = self.__putters.popleft()
                 with guard as selector:
                     if selector:
                         selector.error(ShutDown())
+            # There are only getters if there is no queue
+            while self.__getters:
+                guard, _ = self.__getters.popleft()
+                with guard as selector:
+                    if selector:
+                        selector.error(ShutDown())
+            if immediate or not self.__queue:
+                self.__full_shutdown = True

@@ -196,10 +196,20 @@ class TestQueue:
 
         assert set(all_produced) == expected_items
 
-    def test_shutdown_behavior(self):
-        """Test shutdown behavior."""
-        queue = Queue[str](maxsize=2)
-        queue.shutdown()
+    def test_immediate_shutdown_behavior(self):
+        """Test immediate shutdown behavior - all operations fail immediately."""
+        queue = Queue[str](maxsize=1)
+
+        # Fill the queue to capacity
+        select([queue.put.select("item1")])
+
+        def blocked_putter():
+            index, result = select([queue.put.select("blocked")])
+            return result
+
+        def blocked_getter():
+            index, result = select([queue.get.select()])
+            return result
 
         def put_after_shutdown():
             index, result = select([queue.put.select("after")])
@@ -209,20 +219,189 @@ class TestQueue:
             index, result = select([queue.get.select()])
             return result
 
+        # Start blocked putter (queue is full)
+        blocked_put_thread = Thread(target=blocked_putter)
+        blocked_put_thread.start()
+
+        # Give it time to start waiting
+        time.sleep(0.1)
+        assert blocked_put_thread.is_alive()  # Should be blocked
+
+        # Shutdown immediately
+        queue.shutdown(immediate=True)
+
+        # Start operations after shutdown
+        after_put_thread = Thread(target=put_after_shutdown)
+        after_get_thread = Thread(target=get_after_shutdown)
+        blocked_get_thread = Thread(target=blocked_getter)
+
+        after_put_thread.start()
+        after_get_thread.start()
+        blocked_get_thread.start()
+
+        # Wait for all threads
+        blocked_put_thread.join()
+        after_put_thread.join()
+        after_get_thread.join()
+        blocked_get_thread.join()
+
+        # All operations should have raised ShutDown exceptions
+        with pytest.raises(ShutDown):
+            blocked_put_thread.future.result()
+
+        with pytest.raises(ShutDown):
+            after_put_thread.future.result()
+
+        with pytest.raises(ShutDown):
+            after_get_thread.future.result()
+
+        with pytest.raises(ShutDown):
+            blocked_get_thread.future.result()
+
+    def test_non_immediate_shutdown_behavior(self):
+        """Non-immediate shutdown
+
+        Pending putters fail, getters can drain queue.
+        """
+        queue = Queue[str](maxsize=1)
+
+        # Add item to queue
+        select([queue.put.select("item1")])
+
+        def blocked_putter():
+            index, result = select([queue.put.select("blocked")])
+            return result
+
+        def put_after_shutdown():
+            index, result = select([queue.put.select("after")])
+            return result
+
+        # Start blocked putter (queue is full)
+        blocked_put_thread = Thread(target=blocked_putter)
+        blocked_put_thread.start()
+
+        # Give it time to start waiting
+        time.sleep(0.1)
+        assert blocked_put_thread.is_alive()  # Should be blocked
+
+        # Shutdown non-immediately (default behavior)
+        queue.shutdown(immediate=False)
+
+        # Start operations after shutdown
+        after_put_thread = Thread(target=put_after_shutdown)
+        after_put_thread.start()
+
+        # Wait for threads
+        blocked_put_thread.join()
+        after_put_thread.join()
+
+        # Putters should fail immediately
+        with pytest.raises(ShutDown):
+            blocked_put_thread.future.result()
+
+        with pytest.raises(ShutDown):
+            after_put_thread.future.result()
+
+        # We can still get the existing item
+        index, result = select([queue.get.select()])
+        assert result == "item1"
+
+    def test_non_immediate_vs_immediate_shutdown_difference(self):
+        """Test key difference: non-immediate allows draining, immediate doesn't."""
+        # Test non-immediate: allows draining existing items
+        queue1 = Queue[str](maxsize=2)
+        select([queue1.put.select("item1")])
+        select([queue1.put.select("item2")])
+
+        queue1.shutdown(immediate=False)
+
+        # Should be able to get existing items
+        index, result1 = select([queue1.get.select()])
+        index, result2 = select([queue1.get.select()])
+        assert {result1, result2} == {"item1", "item2"}
+
+        # Test immediate: blocks all operations immediately
+        queue2 = Queue[str](maxsize=2)
+        select([queue2.put.select("item1")])
+        select([queue2.put.select("item2")])
+
+        queue2.shutdown(immediate=True)
+
+        def try_get():
+            index, result = select([queue2.get.select()])
+            return result
+
+        get_thread = Thread(target=try_get)
+        get_thread.start()
+        get_thread.join()
+
+        # Should fail even though items exist
+        with pytest.raises(ShutDown):
+            get_thread.future.result()
+
+    def test_non_immediate_shutdown_empty_queue(self):
+        """Empty queue shuts down immediately."""
+        queue = Queue[str](maxsize=2)
+
+        def put_after_shutdown():
+            index, result = select([queue.put.select("test")])
+            return result
+
+        def get_after_shutdown():
+            index, result = select([queue.get.select()])
+            return result
+
+        # Shutdown non-immediately on empty queue (should behave like immediate)
+        queue.shutdown(immediate=False)
+
+        # Start operations after shutdown
         put_thread = Thread(target=put_after_shutdown)
         get_thread = Thread(target=get_after_shutdown)
-
         put_thread.start()
         get_thread.start()
 
+        # Wait for threads
         put_thread.join()
         get_thread.join()
 
+        # Both operations should fail since queue was empty at shutdown
         with pytest.raises(ShutDown):
             put_thread.future.result()
 
         with pytest.raises(ShutDown):
             get_thread.future.result()
+
+    def test_shutdown_default_behavior(self):
+        """Test that shutdown() without parameters defaults to non-immediate."""
+        queue = Queue[str](maxsize=1)
+
+        # Fill queue to capacity
+        select([queue.put.select("item1")])
+
+        def blocked_putter():
+            index, result = select([queue.put.select("blocked")])
+            return result
+
+        # Start blocked putter (queue is full)
+        put_thread = Thread(target=blocked_putter)
+        put_thread.start()
+
+        # Give it time to start waiting
+        time.sleep(0.1)
+        assert put_thread.is_alive()  # Should be blocked
+
+        # Default shutdown (should be non-immediate)
+        queue.shutdown()
+
+        put_thread.join()
+
+        # Putter should fail
+        with pytest.raises(ShutDown):
+            put_thread.future.result()
+
+        # But we should still be able to get the existing item
+        index, result = select([queue.get.select()])
+        assert result == "item1"
 
 
 class TestSwapQueue:
