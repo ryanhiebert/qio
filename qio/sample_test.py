@@ -5,10 +5,10 @@ import pytest
 from pika import ConnectionParameters
 
 from qio import Qio
-from qio.__main__ import irregular
 from qio.invocation import InvocationSucceeded
 from qio.pika.broker import PikaBroker
 from qio.pika.transport import PikaTransport
+from qio.sample import irregular
 
 
 @pytest.mark.timeout(10)

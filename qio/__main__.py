@@ -1,79 +1,77 @@
-from contextlib import suppress
-from time import sleep as time_sleep
+import importlib
+import tomllib
+from pathlib import Path
 from typing import Annotated
 
 from pika import ConnectionParameters
 from typer import Argument
 from typer import Typer
 
-from . import routine
-from .gather import gather
 from .monitor import Monitor
 from .pika.broker import PikaBroker
 from .pika.transport import PikaTransport
 from .qio import Qio
 from .queuespec import QueueSpec
-from .sleep import sleep
+from .registry import ROUTINE_REGISTRY
 from .worker import Worker
 
 
-@routine(name="regular", queue="qio")
-def regular(instance: int, iterations: int):
-    for i in range(iterations):
-        print(f"Iteration {instance} {i} started")
-        time_sleep(0.1)
-    print(f"Instance {instance} completed")
-    return f"Instance {instance} completed"
+def locate() -> Path | None:
+    """Locate the pyproject.toml file."""
+    for path in [cwd := Path.cwd(), *cwd.parents]:
+        candidate = path / "pyproject.toml"
+        if candidate.is_file():
+            return candidate
+    return None
 
 
-@routine(name="raises", queue="qio")
-def raises():
-    raise ValueError("This is a test exception")
+def register():
+    """Load routine modules from pyproject.toml."""
+    if pyproject := locate():
+        try:
+            with pyproject.open("rb") as f:
+                config = tomllib.load(f)
+        except (OSError, tomllib.TOMLDecodeError):
+            return
 
+        modules = config.get("tool", {}).get("qio", {}).get("register", [])
 
-@routine(name="aregular", queue="qio")
-async def aregular(instance: int, iterations: int):
-    return await regular(instance, iterations)
-
-
-async def abstract(instance: int, iterations: int):
-    # Works as long as the async call stack goes up to an
-    # async def routine.
-    with suppress(ValueError):
-        await raises()
-    return await aregular(instance, iterations)
-
-
-@routine(name="irregular", queue="qio")
-async def irregular():
-    await regular(1, 2)
-    print("irregular sleep started")
-    time_sleep(0.1)
-    print("irregular sleep ended. Starting qio sleep.")
-    await sleep(0.4)
-    print("qio sleep ended")
-    await gather(regular(7, 2), sleep(0.5), abstract(8, 1))
-    return await abstract(2, 5)
+        for module_name in modules:
+            importlib.import_module(module_name)
 
 
 app = Typer()
 
 
 @app.command()
-def submit():
-    connection_params = ConnectionParameters()
-    qio = Qio(
-        broker=PikaBroker(connection_params),
-        transport=PikaTransport(connection_params),
-    )
-    try:
-        qio.submit(irregular())
-    finally:
-        qio.shutdown()
+def show():
+    """Show all registered routines."""
+    register()
+    if not ROUTINE_REGISTRY:
+        print("No routines registered.")
+        return
+
+    # Calculate column widths
+    name_width = max(len("Name"), max(len(name) for name in ROUTINE_REGISTRY))
+    function_paths = []
+    for routine in ROUTINE_REGISTRY.values():
+        module = routine.fn.__module__
+        qualname = routine.fn.__qualname__
+        function_paths.append(f"{module}.{qualname}")
+    path_width = max(len("Path"), max(len(path) for path in function_paths))
+
+    print(f"{'Name':<{name_width}} | {'Path':<{path_width}}")
+    print(f"{'-' * name_width}-+-{'-' * path_width}")
+    for name, path in zip(ROUTINE_REGISTRY.keys(), function_paths, strict=False):
+        print(f"{name:<{name_width}} | {path:<{path_width}}")
 
 
 @app.command()
 def monitor(raw: bool = False):
+    """Monitor qio events.
+
+    Shows a live view of qio activity. Use --raw for detailed event output.
+    """
     if raw:
         connection_params = ConnectionParameters()
         qio = Qio(
@@ -109,6 +107,7 @@ def worker(
     The worker will process invocations from the specified queue,
     as many at a time as specified by the concurrency.
     """
+    register()
     connection_params = ConnectionParameters()
     qio = Qio(
         broker=PikaBroker(connection_params),

@@ -30,6 +30,9 @@ select = ["E", "F", "UP", "B", "SIM", "I"]
 [tool.ruff.lint.isort]
 force-single-line = true
 
+[tool.qio]
+register = ["qio.sample"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
