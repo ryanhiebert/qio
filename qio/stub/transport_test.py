@@ -89,3 +89,4 @@ def test_stub_transport_concurrent_publishing():
     assert len(received_messages) == expected_total
 
     transport.shutdown()
+    subscriber_thread.join(timeout=1.0)

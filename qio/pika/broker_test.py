@@ -28,7 +28,7 @@ def test_prefetch_limits_message_consumption():
             consumed_messages.append(message)
             # Don't call start() - this should block after prefetch_limit messages
 
-    thread = threading.Thread(target=consume_messages, daemon=True)
+    thread = threading.Thread(target=consume_messages)
     thread.start()
 
     # Wait for consumer to reach prefetch limit or timeout
@@ -39,6 +39,7 @@ def test_prefetch_limits_message_consumption():
     assert thread.is_alive()  # Thread should still be alive (blocked)
 
     broker.shutdown()
+    thread.join(timeout=1.0)  # Clean up thread
 
 
 @pytest.mark.timeout(2)
@@ -61,7 +62,7 @@ def test_suspend_resume_affects_prefetch_capacity():
             consumed_messages.append(message)
             broker.start(message)
 
-    thread = threading.Thread(target=consume_messages, daemon=True)
+    thread = threading.Thread(target=consume_messages)
     thread.start()
 
     # Wait for initial consumption up to prefetch limit
@@ -78,6 +79,7 @@ def test_suspend_resume_affects_prefetch_capacity():
     broker.resume(consumed_messages[0])
 
     broker.shutdown()
+    thread.join(timeout=1.0)  # Clean up thread
 
 
 @pytest.mark.timeout(2)
@@ -100,7 +102,7 @@ def test_complete_message_frees_prefetch_capacity():
             consumed_messages.append(message)
             broker.start(message)
 
-    thread = threading.Thread(target=consume_messages, daemon=True)
+    thread = threading.Thread(target=consume_messages)
     thread.start()
 
     # Initial consumption up to prefetch limit
@@ -119,6 +121,7 @@ def test_complete_message_frees_prefetch_capacity():
     assert len(consumed_messages) == 4
 
     broker.shutdown()
+    thread.join(timeout=1.0)  # Clean up thread
 
 
 @pytest.mark.timeout(2)
@@ -148,8 +151,8 @@ def test_multiple_consumers_independent_prefetch_limits():
             consumer2_messages.append(message)
             broker.start(message)
 
-    thread1 = threading.Thread(target=consume_with_limit_2, daemon=True)
-    thread2 = threading.Thread(target=consume_with_limit_3, daemon=True)
+    thread1 = threading.Thread(target=consume_with_limit_2)
+    thread2 = threading.Thread(target=consume_with_limit_3)
 
     thread1.start()
     thread2.start()
@@ -165,6 +168,8 @@ def test_multiple_consumers_independent_prefetch_limits():
     assert thread2.is_alive()
 
     broker.shutdown()
+    thread1.join(timeout=1.0)  # Clean up threads
+    thread2.join(timeout=1.0)
 
 
 def test_consume_rejects_empty_queues():

@@ -1,12 +1,16 @@
 import threading
 from collections import defaultdict
+from collections import deque
+from collections.abc import Iterable
 from collections.abc import Iterator
+from random import randrange
 
 from qio.broker import Broker
 from qio.broker import Message
 from qio.queue import Queue
 from qio.queue import ShutDown
 from qio.queuespec import QueueSpec
+from qio.select import select
 
 
 class StubBroker(Broker):
@@ -25,12 +29,9 @@ class StubBroker(Broker):
     def consume(self, queuespec: QueueSpec, /) -> Iterator[Message]:
         if not queuespec.queues:
             raise ValueError("QueueSpec must have at least one queue")
-        if len(queuespec.queues) != 1:
-            raise ValueError("Only one queue is supported")
 
-        queue = queuespec.queues[0]
-        prefetch = queuespec.concurrency
-        consumer = _Consumer(self.__queues[queue], prefetch)
+        queues = [self.__queues[queue] for queue in queuespec.queues]
+        consumer = _Consumer(queues, queuespec.concurrency)
 
         for payload in consumer:
             message = Message(body=payload)
@@ -63,6 +64,10 @@ class StubBroker(Broker):
             consumer.ack()
 
     def shutdown(self):
+        # First notify all consumers to wake up from capacity waits
+        for consumer in set(self.__consumers.values()):
+            consumer.shutdown()
+
         for q in self.__queues.values():
             q.shutdown(immediate=True)
         self.__queues.clear()
@@ -72,24 +77,36 @@ class StubBroker(Broker):
 
 
 class _Consumer:
-    def __init__(self, queue: Queue[bytes], prefetch: int):
-        self.__queue = queue
+    def __init__(self, queues: Iterable[Queue[bytes]], prefetch: int):
+        self.__queues = deque(queues)
         self.__capacity = prefetch
         # A bounded semaphore won't work because resume()
         # needs to decrease capacity without blocking
         self.__condition = threading.Condition()
+        self.__shutdown = False
+
+        # Randomize the starting position
+        for _ in range(randrange(len(self.__queues))):
+            self.__queues.append(self.__queues.popleft())
 
     def __iter__(self) -> Iterator[bytes]:
         while True:
             # Wait for capacity to consume a message
             with self.__condition:
-                while self.__capacity <= 0:
+                while self.__capacity <= 0 and not self.__shutdown:
                     self.__condition.wait()
+                if self.__shutdown:
+                    return
                 self.__capacity -= 1
             try:
-                yield self.__queue.get()
+                i, value = select([queue.get.select() for queue in self.__queues])
             except ShutDown:
                 return
+
+            # Cycle past the one that succeeded to do a fair round-robin
+            for _ in range(i + 1):
+                self.__queues.append(self.__queues.popleft())
+            yield value
 
     def ack(self):
         with self.__condition:
@@ -99,3 +116,8 @@ class _Consumer:
     def unack(self):
         with self.__condition:
             self.__capacity -= 1
+
+    def shutdown(self):
+        with self.__condition:
+            self.__shutdown = True
+            self.__condition.notify_all()
