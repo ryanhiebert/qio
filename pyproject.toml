@@ -32,6 +32,8 @@ force-single-line = true
 
 [tool.qio]
 register = ["qio.sample"]
+broker = "pika"
+transport = "pika"
 
 [build-system]
 requires = ["hatchling"]

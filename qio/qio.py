@@ -1,7 +1,10 @@
+import importlib
+import tomllib
 from collections.abc import Generator
 from collections.abc import Iterable
 from concurrent.futures import Future
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 
 from .broker import Broker
@@ -32,10 +35,64 @@ from .transport import Transport
 
 
 class Qio:
-    def __init__(self, *, broker: Broker, transport: Transport):
-        self.__bus = Bus(transport)
-        self.__broker = broker
+    def __init__(
+        self,
+        *,
+        broker: Broker | None = None,
+        transport: Transport | None = None,
+    ):
+        self.__broker = broker or self.__default_broker()
+        self.__bus = Bus(transport or self.__default_transport())
         self.__invocations = dict[Invocation, Message]()
+        self.__register_routines()
+
+    def __pyproject(self) -> Path | None:
+        for path in [cwd := Path.cwd(), *cwd.parents]:
+            candidate = path / "pyproject.toml"
+            if candidate.is_file():
+                return candidate
+        return None
+
+    def __config(self) -> dict:
+        if pyproject := self.__pyproject():
+            with pyproject.open("rb") as f:
+                config = tomllib.load(f)
+            return config.get("tool", {}).get("qio", {})
+        return {}
+
+    def __default_broker(self) -> Broker:
+        config = self.__config()
+        broker_type = config.get("broker", "pika")
+
+        if broker_type == "pika":
+            from pika import ConnectionParameters
+
+            from .pika.broker import PikaBroker
+
+            return PikaBroker(ConnectionParameters())
+        else:
+            raise ValueError(f"Unknown broker type: {broker_type}")
+
+    def __default_transport(self) -> Transport:
+        config = self.__config()
+        transport_type = config.get("transport", "pika")
+
+        if transport_type == "pika":
+            from pika import ConnectionParameters
+
+            from .pika.transport import PikaTransport
+
+            return PikaTransport(ConnectionParameters())
+        else:
+            raise ValueError(f"Unknown transport type: {transport_type}")
+
+    def __register_routines(self):
+        """Load routine modules from pyproject.toml."""
+        config = self.__config()
+        modules = config.get("register", [])
+
+        for module_name in modules:
+            importlib.import_module(module_name)
 
     def run[R](self, invocation: Invocation[R], /) -> R:
         with self.invocation_handler():
@@ -46,6 +103,10 @@ class Qio:
 
     def routine(self, routine_name: str, /) -> Routine:
         return ROUTINE_REGISTRY[routine_name]
+
+    def routines(self) -> list[Routine]:
+        """Return all registered routines."""
+        return list(ROUTINE_REGISTRY.values())
 
     def subscribe[T](self, types: Iterable[type[T]]) -> Queue[T]:
         return self.__bus.subscribe(types)

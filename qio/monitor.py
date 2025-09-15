@@ -1,4 +1,3 @@
-from pika import ConnectionParameters
 from textual.app import App
 from textual.app import ComposeResult
 from textual.widgets import DataTable
@@ -13,8 +12,6 @@ from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspended
 from .invocation import InvocationThrew
-from .pika.broker import PikaBroker
-from .pika.transport import PikaTransport
 from .qio import Qio
 from .queue import ShutDown
 from .thread import Thread
@@ -27,11 +24,7 @@ class Monitor(App):
 
     def __init__(self):
         super().__init__()
-        connection_params = ConnectionParameters()
-        self.__qio = Qio(
-            broker=PikaBroker(connection_params),
-            transport=PikaTransport(connection_params),
-        )
+        self.__qio = Qio()
         self.__thread = Thread(target=self.__listen)
         self.__events = self.__qio.subscribe(
             {
