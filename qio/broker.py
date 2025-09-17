@@ -16,6 +16,12 @@ class Message:
 class Broker(ABC):
     """A broker enables producing and consuming messages on a queue."""
 
+    @classmethod
+    @abstractmethod
+    def from_uri(cls, uri: str, /):
+        """Create a broker instance from a URI."""
+        raise NotImplementedError("Subclasses must implement this method.")
+
     @abstractmethod
     def enqueue(self, body: bytes, /, *, queue: str):
         """Enqueue a message."""

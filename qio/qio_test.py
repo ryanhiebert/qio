@@ -66,8 +66,8 @@ def test_qio_loads_default_configuration(tmp_path):
         version = "0.1.0"
 
         [tool.qio]
-        broker = "pika"
-        transport = "pika"
+        broker = "pika://localhost:5672"
+        transport = "pika://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -109,8 +109,8 @@ def test_qio_allows_independent_broker_transport_override(tmp_path):
         version = "0.1.0"
 
         [tool.qio]
-        broker = "pika"
-        transport = "pika"
+        broker = "pika://localhost:5672"
+        transport = "pika://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -194,8 +194,8 @@ def test_qio_with_valid_config(tmp_path):
 
         [tool.qio]
         register = ["qio.sample"]
-        broker = "pika"
-        transport = "pika"
+        broker = "pika://localhost:5672"
+        transport = "pika://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -304,8 +304,8 @@ def test_qio_with_invalid_config(tmp_path):
         version = "0.1.0"
 
         [tool.qio]
-        broker = "unknown_broker"
-        transport = "pika"
+        broker = "unknown://localhost:5672"
+        transport = "pika://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -318,8 +318,11 @@ def test_qio_with_invalid_config(tmp_path):
     ROUTINE_REGISTRY.clear()
 
     try:
-        # Should raise ValueError for unknown broker type
-        with pytest.raises(ValueError, match="Unknown broker type: unknown_broker"):
+        # Should raise ValueError for unknown broker URI scheme
+        with pytest.raises(
+            ValueError,
+            match="URI scheme must be 'pika:', got: unknown://localhost:5672",
+        ):
             Qio()
     finally:
         os.chdir(original_cwd)
@@ -342,8 +345,8 @@ def test_qio_with_invalid_transport_config(tmp_path):
         version = "0.1.0"
 
         [tool.qio]
-        broker = "pika"
-        transport = "unknown_transport"
+        broker = "pika://localhost:5672"
+        transport = "unknown://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -356,9 +359,213 @@ def test_qio_with_invalid_transport_config(tmp_path):
     ROUTINE_REGISTRY.clear()
 
     try:
-        # Should raise ValueError for unknown transport type
+        # Should raise ValueError for unknown transport URI scheme
         with pytest.raises(
-            ValueError, match="Unknown transport type: unknown_transport"
+            ValueError,
+            match="URI scheme must be 'pika:', got: unknown://localhost:5672",
+        ):
+            Qio()
+    finally:
+        os.chdir(original_cwd)
+        # Restore registry
+        ROUTINE_REGISTRY.clear()
+        ROUTINE_REGISTRY.update(original_registry)
+
+
+def test_qio_with_uri_broker_config(tmp_path):
+    """Qio works with URI-based broker configuration."""
+    import os
+
+    # Create config with broker URI
+    config_dir = tmp_path / "uri_broker_config"
+    config_dir.mkdir()
+    config_file = config_dir / "pyproject.toml"
+    config_content = """
+        [project]
+        name = "test-project-uri-broker"
+        version = "0.1.0"
+
+        [tool.qio]
+        broker = "pika://localhost:5672"
+        transport = "pika://localhost:5672"
+        """
+    config_file.write_text(config_content)
+
+    # Change to config directory
+    original_cwd = os.getcwd()
+    os.chdir(config_dir)
+
+    # Clear registry to isolate test
+    original_registry = dict(ROUTINE_REGISTRY)
+    ROUTINE_REGISTRY.clear()
+
+    try:
+        qio = Qio()
+        try:
+            # Should work with URI configuration
+            qio.purge(queue="test")
+        finally:
+            qio.shutdown()
+    finally:
+        os.chdir(original_cwd)
+        # Restore registry
+        ROUTINE_REGISTRY.clear()
+        ROUTINE_REGISTRY.update(original_registry)
+
+
+def test_qio_with_uri_transport_config(tmp_path):
+    """Qio works with URI-based transport configuration."""
+    import os
+
+    # Create config with transport URI
+    config_dir = tmp_path / "uri_transport_config"
+    config_dir.mkdir()
+    config_file = config_dir / "pyproject.toml"
+    config_content = """
+        [project]
+        name = "test-project-uri-transport"
+        version = "0.1.0"
+
+        [tool.qio]
+        broker = "pika://localhost:5672"
+        transport = "pika://localhost:5672"
+        """
+    config_file.write_text(config_content)
+
+    # Change to config directory
+    original_cwd = os.getcwd()
+    os.chdir(config_dir)
+
+    # Clear registry to isolate test
+    original_registry = dict(ROUTINE_REGISTRY)
+    ROUTINE_REGISTRY.clear()
+
+    try:
+        qio = Qio()
+        try:
+            # Should work with URI configuration
+            qio.purge(queue="test")
+        finally:
+            qio.shutdown()
+    finally:
+        os.chdir(original_cwd)
+        # Restore registry
+        ROUTINE_REGISTRY.clear()
+        ROUTINE_REGISTRY.update(original_registry)
+
+
+def test_qio_with_both_uri_configs(tmp_path):
+    """Qio works with both broker and transport as URIs."""
+    import os
+
+    # Create config with both URIs
+    config_dir = tmp_path / "both_uri_config"
+    config_dir.mkdir()
+    config_file = config_dir / "pyproject.toml"
+    config_content = """
+        [project]
+        name = "test-project-both-uri"
+        version = "0.1.0"
+
+        [tool.qio]
+        broker = "pika://localhost:5672"
+        transport = "pika://localhost:5672"
+        """
+    config_file.write_text(config_content)
+
+    # Change to config directory
+    original_cwd = os.getcwd()
+    os.chdir(config_dir)
+
+    # Clear registry to isolate test
+    original_registry = dict(ROUTINE_REGISTRY)
+    ROUTINE_REGISTRY.clear()
+
+    try:
+        qio = Qio()
+        try:
+            # Should work with both URI configurations
+            qio.purge(queue="test")
+        finally:
+            qio.shutdown()
+    finally:
+        os.chdir(original_cwd)
+        # Restore registry
+        ROUTINE_REGISTRY.clear()
+        ROUTINE_REGISTRY.update(original_registry)
+
+
+def test_qio_with_invalid_broker_uri_scheme(tmp_path):
+    """Qio fails with invalid URI scheme for broker."""
+    import os
+
+    # Create config with invalid broker URI scheme
+    config_dir = tmp_path / "invalid_broker_uri"
+    config_dir.mkdir()
+    config_file = config_dir / "pyproject.toml"
+    config_content = """
+        [project]
+        name = "test-project-invalid-broker-uri"
+        version = "0.1.0"
+
+        [tool.qio]
+        broker = "redis://localhost:6379"
+        transport = "pika://localhost:5672"
+        """
+    config_file.write_text(config_content)
+
+    # Change to config directory
+    original_cwd = os.getcwd()
+    os.chdir(config_dir)
+
+    # Clear registry to isolate test
+    original_registry = dict(ROUTINE_REGISTRY)
+    ROUTINE_REGISTRY.clear()
+
+    try:
+        # Should raise ValueError for invalid URI scheme
+        with pytest.raises(
+            ValueError, match="URI scheme must be 'pika:', got: redis://localhost:6379"
+        ):
+            Qio()
+    finally:
+        os.chdir(original_cwd)
+        # Restore registry
+        ROUTINE_REGISTRY.clear()
+        ROUTINE_REGISTRY.update(original_registry)
+
+
+def test_qio_with_invalid_transport_uri_scheme(tmp_path):
+    """Qio fails with invalid URI scheme for transport."""
+    import os
+
+    # Create config with invalid transport URI scheme
+    config_dir = tmp_path / "invalid_transport_uri"
+    config_dir.mkdir()
+    config_file = config_dir / "pyproject.toml"
+    config_content = """
+        [project]
+        name = "test-project-invalid-transport-uri"
+        version = "0.1.0"
+
+        [tool.qio]
+        broker = "pika://localhost:5672"
+        transport = "redis://localhost:6379"
+        """
+    config_file.write_text(config_content)
+
+    # Change to config directory
+    original_cwd = os.getcwd()
+    os.chdir(config_dir)
+
+    # Clear registry to isolate test
+    original_registry = dict(ROUTINE_REGISTRY)
+    ROUTINE_REGISTRY.clear()
+
+    try:
+        # Should raise ValueError for invalid URI scheme
+        with pytest.raises(
+            ValueError, match="URI scheme must be 'pika:', got: redis://localhost:6379"
         ):
             Qio()
     finally:

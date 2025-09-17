@@ -16,6 +16,12 @@ from qio.queuespec import QueueSpec
 class PikaBroker(Broker):
     """A broker enables producing and consuming messages on a queue."""
 
+    @classmethod
+    def from_uri(cls, uri: str, /):
+        """Create a broker instance from a URI."""
+        amqp_uri = "amqp:" + uri.removeprefix("pika:")
+        return cls(URLParameters(amqp_uri))
+
     def __init__(self, connection_params: ConnectionParameters | URLParameters):
         self.__connection_params = connection_params
         self.__producer_channel_lock = Lock()

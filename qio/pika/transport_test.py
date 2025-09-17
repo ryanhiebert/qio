@@ -8,6 +8,13 @@ from pika import ConnectionParameters
 from .transport import PikaTransport
 
 
+def test_pika_transport_from_uri():
+    """Test PikaTransport.from_uri with localhost URI creates transport successfully."""
+    transport = PikaTransport.from_uri("pika://localhost:5672")
+    assert isinstance(transport, PikaTransport)
+    transport.shutdown()
+
+
 @pytest.mark.timeout(2)
 def test_pika_transport_multiple_messages():
     """Verify that multiple messages can be published and received in order."""

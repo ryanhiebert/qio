@@ -11,6 +11,10 @@ class StubTransport(Transport):
     def __init__(self):
         self.__queue = Queue[bytes]()
 
+    @classmethod
+    def from_uri(cls, uri: str, /):
+        return cls()
+
     def subscribe(self) -> Iterator[bytes]:
         while True:
             try:

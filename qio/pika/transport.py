@@ -14,6 +14,12 @@ from ..queue import ShutDown
 
 
 class PikaTransport(Transport):
+    @classmethod
+    def from_uri(cls, uri: str, /):
+        """Create a transport instance from a URI."""
+        amqp_uri = "amqp:" + uri.removeprefix("pika:")
+        return cls(URLParameters(amqp_uri))
+
     def __init__(self, connection_params: ConnectionParameters | URLParameters):
         self.__connection_params = connection_params
         self.__subscriber = Queue[bytes]()

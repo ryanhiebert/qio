@@ -8,6 +8,13 @@ from qio.queuespec import QueueSpec
 from .broker import PikaBroker
 
 
+def test_pika_broker_from_uri():
+    """Test PikaBroker.from_uri with localhost URI creates broker successfully."""
+    broker = PikaBroker.from_uri("pika://localhost:5672")
+    assert isinstance(broker, PikaBroker)
+    broker.shutdown()
+
+
 @pytest.mark.timeout(2)
 def test_prefetch_limits_message_consumption():
     """Verify that prefetch parameter limits message consumption."""

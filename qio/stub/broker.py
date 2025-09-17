@@ -20,6 +20,10 @@ class StubBroker(Broker):
         self.__suspended = set[Message]()
         self.__consumers: dict[Message, _Consumer] = {}
 
+    @classmethod
+    def from_uri(cls, uri: str, /):
+        return cls()
+
     def enqueue(self, body: bytes, /, *, queue: str):
         self.__queues[queue].put(body)
 

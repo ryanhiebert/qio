@@ -62,29 +62,25 @@ class Qio:
 
     def __default_broker(self) -> Broker:
         config = self.__config()
-        broker_type = config.get("broker", "pika")
+        broker_uri = config.get("broker", "pika://localhost:5672")
 
-        if broker_type == "pika":
-            from pika import ConnectionParameters
+        if not broker_uri.startswith("pika:"):
+            raise ValueError(f"URI scheme must be 'pika:', got: {broker_uri}")
 
-            from .pika.broker import PikaBroker
+        from .pika.broker import PikaBroker
 
-            return PikaBroker(ConnectionParameters())
-        else:
-            raise ValueError(f"Unknown broker type: {broker_type}")
+        return PikaBroker.from_uri(broker_uri)
 
     def __default_transport(self) -> Transport:
         config = self.__config()
-        transport_type = config.get("transport", "pika")
+        transport_uri = config.get("transport", "pika://localhost:5672")
 
-        if transport_type == "pika":
-            from pika import ConnectionParameters
+        if not transport_uri.startswith("pika:"):
+            raise ValueError(f"URI scheme must be 'pika:', got: {transport_uri}")
 
-            from .pika.transport import PikaTransport
+        from .pika.transport import PikaTransport
 
-            return PikaTransport(ConnectionParameters())
-        else:
-            raise ValueError(f"Unknown transport type: {transport_type}")
+        return PikaTransport.from_uri(transport_uri)
 
     def __register_routines(self):
         """Load routine modules from pyproject.toml."""
