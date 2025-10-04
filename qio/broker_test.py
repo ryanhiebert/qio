@@ -10,7 +10,6 @@ from .broker import MyBroker
 
 class TestMyBroker(BaseBrokerTest):
     supports_multiple_queues = True  # Set based on broker capabilities
-    supports_from_uri = True
 
     @pytest.fixture
     def broker(self):
@@ -52,7 +51,6 @@ class BaseBrokerTest:
     """Base class with common tests for all broker implementations."""
 
     supports_multiple_queues = True
-    supports_from_uri = True
 
     @pytest.fixture
     def broker(self):

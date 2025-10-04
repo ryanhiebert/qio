@@ -9,7 +9,6 @@ from qio.transport_test import BaseTransportTest
 from .transport import MyTransport
 
 class TestMyTransport(BaseTransportTest):
-    supports_from_uri = True  # Set based on transport capabilities
 
     @pytest.fixture
     def transport(self):
@@ -49,8 +48,6 @@ def skip_if_unsupported(feature_attr):
 
 class BaseTransportTest:
     """Base class with common tests for all transport implementations."""
-
-    supports_from_uri = True
 
     @pytest.fixture
     def transport(self):

@@ -13,3 +13,9 @@ class TestStubBroker(BaseBrokerTest):
         broker = StubBroker()
         yield broker
         broker.shutdown()
+
+    def test_stub_broker_from_uri(self):
+        """Test StubBroker.from_uri creates broker successfully."""
+        broker = StubBroker.from_uri("stub://test")
+        assert isinstance(broker, StubBroker)
+        broker.shutdown()

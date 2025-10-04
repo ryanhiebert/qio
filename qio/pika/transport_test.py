@@ -7,8 +7,6 @@ from .transport import PikaTransport
 
 
 class TestPikaTransport(BaseTransportTest):
-    supports_from_uri = True
-
     @pytest.fixture
     def transport(self):
         transport = PikaTransport(ConnectionParameters())
