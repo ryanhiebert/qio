@@ -8,7 +8,11 @@ from .queuespec import QueueSpec
 
 @dataclass(eq=False, frozen=True)
 class Message:
-    """A message from a broker."""
+    """A message from a broker.
+
+    Messages are assumed to be idempotent, and may be processed
+    multiple times in some non-typical situations.
+    """
 
     body: bytes
 
@@ -39,22 +43,31 @@ class Broker(ABC):
 
     @abstractmethod
     def start(self, _: Message, /):
-        """Start processing a message."""
+        """Report that processing of a message has started."""
         raise NotImplementedError("Subclasses must implement this method.")
 
     @abstractmethod
     def suspend(self, message: Message, /):
-        """Report that the processing of a message has been suspended."""
+        """Report that the processing of a message has been suspended.
+
+        The message is not completed, and is expected to resume.
+        """
         raise NotImplementedError("Subclasses must implement this method.")
 
     @abstractmethod
     def resume(self, message: Message, /):
-        """Report that the processing of a message has resumed."""
+        """Report that the processing of a message has resumed.
+
+        The processing of the message may suspend again, or it may complete.
+        """
         raise NotImplementedError("Subclasses must implement this method.")
 
     @abstractmethod
     def complete(self, message: Message, /):
-        """Report that the processing of a message has completed."""
+        """Report that the processing of a message has completed.
+
+        When complete, no other worker will need to process the message again.
+        """
         raise NotImplementedError("Subclasses must implement this method.")
 
     @abstractmethod
