@@ -28,6 +28,8 @@ class PikaTransport(Transport):
         self.__queue_name = cast(
             str, self.__subscribe_channel.queue_declare("", exclusive=True).method.queue
         )
+        self.__shutdown_lock = Lock()
+        self.__shutdown = False
         self.__subscribe_channel.queue_bind(
             self.__queue_name, "amq.topic", routing_key="#"
         )
@@ -61,16 +63,21 @@ class PikaTransport(Transport):
             )
 
     def shutdown(self):
-        lock = Lock()
-        lock.acquire()
+        with self.__shutdown_lock:
+            if self.__shutdown:
+                return
+            self.__shutdown = True
 
-        def callback():
-            self.__subscribe_channel.cancel()
-            lock.release()
+            lock = Lock()
+            lock.acquire()
 
-        self.__subscribe_connection.add_callback_threadsafe(callback)
-        with lock:
-            pass
+            def callback():
+                self.__subscribe_channel.cancel()
+                lock.release()
 
-        self.__subscribe_thread.join()
-        self.__subscriber.shutdown()
+            self.__subscribe_connection.add_callback_threadsafe(callback)
+            with lock:
+                pass
+
+            self.__subscribe_thread.join()
+            self.__subscriber.shutdown()

@@ -1,3 +1,4 @@
+import threading
 from collections.abc import Iterator
 
 from qio.queue import Queue
@@ -10,6 +11,8 @@ class StubTransport(Transport):
 
     def __init__(self):
         self.__queue = Queue[bytes]()
+        self.__shutdown_lock = threading.Lock()
+        self.__shutdown = False
 
     @classmethod
     def from_uri(cls, uri: str, /):
@@ -26,4 +29,8 @@ class StubTransport(Transport):
         self.__queue.put(message)
 
     def shutdown(self):
-        self.__queue.shutdown()
+        with self.__shutdown_lock:
+            if self.__shutdown:
+                return
+            self.__shutdown = True
+            self.__queue.shutdown()
