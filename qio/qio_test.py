@@ -54,8 +54,8 @@ def test_different_qio_instances_are_independent():
         qio2.shutdown()
 
 
-def test_qio_loads_default_configuration(tmp_path):
-    """Qio loads default broker and transport when none provided."""
+def test_qio_loads_configuration_from_pyproject(tmp_path):
+    """Qio loads broker and transport configuration from pyproject.toml."""
 
     # Create config with default settings
     config_dir = tmp_path / "default_config"
@@ -214,77 +214,6 @@ def test_qio_with_valid_config(tmp_path):
             qio.shutdown()
     finally:
         os.chdir(original_cwd)
-
-
-def test_qio_with_no_config(tmp_path):
-    """Qio works with pyproject.toml that has no [tool.qio] section."""
-
-    # Create config with no qio section
-    config_dir = tmp_path / "no_config"
-    config_dir.mkdir()
-    config_file = config_dir / "pyproject.toml"
-    config_content = """
-        [project]
-        name = "test-project-no-config"
-        version = "0.1.0"
-        """
-    config_file.write_text(config_content)
-
-    # Change to config directory
-    original_cwd = os.getcwd()
-    os.chdir(config_dir)
-
-    # Clear registry to isolate test
-    original_registry = dict(ROUTINE_REGISTRY)
-    ROUTINE_REGISTRY.clear()
-
-    try:
-        qio = Qio()
-        try:
-            # Should use defaults and work
-            qio.purge(queue="test")
-            routines = qio.routines()
-            # Should have no routines since no register config
-            assert len(routines) == 0
-        finally:
-            qio.shutdown()
-    finally:
-        os.chdir(original_cwd)
-        # Restore registry
-        ROUTINE_REGISTRY.clear()
-        ROUTINE_REGISTRY.update(original_registry)
-
-
-def test_qio_with_no_pyproject_file(tmp_path):
-    """Qio works when no pyproject.toml exists."""
-
-    # Create empty directory with no pyproject.toml
-    config_dir = tmp_path / "empty"
-    config_dir.mkdir()
-
-    # Change to empty directory
-    original_cwd = os.getcwd()
-    os.chdir(config_dir)
-
-    # Clear registry to isolate test
-    original_registry = dict(ROUTINE_REGISTRY)
-    ROUTINE_REGISTRY.clear()
-
-    try:
-        qio = Qio()
-        try:
-            # Should use defaults and work
-            qio.purge(queue="test")
-            routines = qio.routines()
-            # Should have no routines since no config
-            assert len(routines) == 0
-        finally:
-            qio.shutdown()
-    finally:
-        os.chdir(original_cwd)
-        # Restore registry
-        ROUTINE_REGISTRY.clear()
-        ROUTINE_REGISTRY.update(original_registry)
 
 
 def test_qio_with_invalid_config(tmp_path):

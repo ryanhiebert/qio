@@ -65,7 +65,12 @@ class Qio:
         broker_uri = os.environ.get("QIO_BROKER")
         if not broker_uri:
             config = self.__config()
-            broker_uri = config.get("broker", "pika://localhost:5672")
+            broker_uri = config.get("broker")
+            if not broker_uri:
+                raise ValueError(
+                    "No broker URI configured. Set QIO_BROKER env var "
+                    "or add 'broker' to [tool.qio] in pyproject.toml"
+                )
 
         if not broker_uri.startswith("pika:"):
             raise ValueError(f"URI scheme must be 'pika:', got: {broker_uri}")
@@ -78,7 +83,12 @@ class Qio:
         transport_uri = os.environ.get("QIO_TRANSPORT")
         if not transport_uri:
             config = self.__config()
-            transport_uri = config.get("transport", "pika://localhost:5672")
+            transport_uri = config.get("transport")
+            if not transport_uri:
+                raise ValueError(
+                    "No transport URI configured. Set QIO_TRANSPORT env var "
+                    "or add 'transport' to [tool.qio] in pyproject.toml"
+                )
 
         if not transport_uri.startswith("pika:"):
             raise ValueError(f"URI scheme must be 'pika:', got: {transport_uri}")

@@ -1,12 +1,11 @@
 # Qio Class Configuration
 
-The `Qio` class supports configuration of broker and transport connections through multiple methods with a clear priority order. You can mix environment variables and config file settings - environment variables always take precedence over config file settings, which take precedence over the default values (`pika://localhost:5672`).
+The `Qio` class requires configuration of broker and transport connections through environment variables or config file settings. Environment variables always take precedence over config file settings.
 
 ## Priority Order
 
 1. **Environment Variables** (highest priority)
 2. **Configuration File** (pyproject.toml)
-3. **Default Values** (`pika://localhost:5672`)
 
 ## Environment Variables
 
