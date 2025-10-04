@@ -28,6 +28,8 @@ class PikaBroker(Broker):
         self.__producer_channel = BlockingConnection(self.__connection_params).channel()
         self.__consumers = set[_Consumer]()
         self.__messages = dict[Message, tuple[_Consumer, int]]()
+        self.__shutdown_lock = Lock()
+        self.__shutdown = False
         self.__suspended = set[Message]()
 
     def enqueue(self, body: bytes, /, *, queue: str):
@@ -91,8 +93,12 @@ class PikaBroker(Broker):
 
     def shutdown(self):
         """Signal the final shutdown of the broker."""
-        for consumer in self.__consumers:
-            consumer.shutdown()
+        with self.__shutdown_lock:
+            if self.__shutdown:
+                return
+            self.__shutdown = True
+            for consumer in self.__consumers:
+                consumer.shutdown()
 
 
 class _Consumer:

@@ -19,6 +19,8 @@ class StubBroker(Broker):
         self.__processing = set[Message]()
         self.__suspended = set[Message]()
         self.__consumers: dict[Message, _Consumer] = {}
+        self.__shutdown_lock = threading.Lock()
+        self.__shutdown = False
 
     @classmethod
     def from_uri(cls, uri: str, /):
@@ -68,16 +70,21 @@ class StubBroker(Broker):
             consumer.ack()
 
     def shutdown(self):
-        # First notify all consumers to wake up from capacity waits
-        for consumer in set(self.__consumers.values()):
-            consumer.shutdown()
+        with self.__shutdown_lock:
+            if self.__shutdown:
+                return
+            self.__shutdown = True
 
-        for q in self.__queues.values():
-            q.shutdown(immediate=True)
-        self.__queues.clear()
-        self.__processing.clear()
-        self.__suspended.clear()
-        self.__consumers.clear()
+            # First notify all consumers to wake up from capacity waits
+            for consumer in set(self.__consumers.values()):
+                consumer.shutdown()
+
+            for q in self.__queues.values():
+                q.shutdown(immediate=True)
+            self.__queues.clear()
+            self.__processing.clear()
+            self.__suspended.clear()
+            self.__consumers.clear()
 
 
 class _Consumer:
