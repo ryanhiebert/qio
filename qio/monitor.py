@@ -18,9 +18,9 @@ from .thread import Thread
 
 
 class Monitor(App):
-    """TUI for monitoring Qio events."""
+    """TUI for monitoring qio events."""
 
-    TITLE = "Qio Monitor"
+    TITLE = "qio Monitor"
 
     def __init__(self):
         super().__init__()

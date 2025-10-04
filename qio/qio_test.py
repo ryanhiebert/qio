@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from .qio import Qio
@@ -54,7 +56,6 @@ def test_different_qio_instances_are_independent():
 
 def test_qio_loads_default_configuration(tmp_path):
     """Qio loads default broker and transport when none provided."""
-    import os
 
     # Create config with default settings
     config_dir = tmp_path / "default_config"
@@ -97,7 +98,6 @@ def test_qio_loads_default_configuration(tmp_path):
 
 def test_qio_allows_independent_broker_transport_override(tmp_path):
     """Qio allows independent override of broker or transport."""
-    import os
 
     # Create config for default broker/transport
     config_dir = tmp_path / "override_test"
@@ -181,7 +181,6 @@ def test_qio_routines_method():
 
 def test_qio_with_valid_config(tmp_path):
     """Qio works with a valid pyproject.toml configuration."""
-    import os
 
     # Create valid config
     config_dir = tmp_path / "valid_config"
@@ -219,7 +218,6 @@ def test_qio_with_valid_config(tmp_path):
 
 def test_qio_with_no_config(tmp_path):
     """Qio works with pyproject.toml that has no [tool.qio] section."""
-    import os
 
     # Create config with no qio section
     config_dir = tmp_path / "no_config"
@@ -259,7 +257,6 @@ def test_qio_with_no_config(tmp_path):
 
 def test_qio_with_no_pyproject_file(tmp_path):
     """Qio works when no pyproject.toml exists."""
-    import os
 
     # Create empty directory with no pyproject.toml
     config_dir = tmp_path / "empty"
@@ -292,7 +289,6 @@ def test_qio_with_no_pyproject_file(tmp_path):
 
 def test_qio_with_invalid_config(tmp_path):
     """Qio fails with unknown broker/transport types."""
-    import os
 
     # Create config with unknown broker/transport
     config_dir = tmp_path / "invalid_config"
@@ -333,7 +329,6 @@ def test_qio_with_invalid_config(tmp_path):
 
 def test_qio_with_invalid_transport_config(tmp_path):
     """Qio fails with unknown transport type."""
-    import os
 
     # Create config with unknown transport
     config_dir = tmp_path / "invalid_transport_config"
@@ -374,7 +369,6 @@ def test_qio_with_invalid_transport_config(tmp_path):
 
 def test_qio_with_uri_broker_config(tmp_path):
     """Qio works with URI-based broker configuration."""
-    import os
 
     # Create config with broker URI
     config_dir = tmp_path / "uri_broker_config"
@@ -415,7 +409,6 @@ def test_qio_with_uri_broker_config(tmp_path):
 
 def test_qio_with_uri_transport_config(tmp_path):
     """Qio works with URI-based transport configuration."""
-    import os
 
     # Create config with transport URI
     config_dir = tmp_path / "uri_transport_config"
@@ -456,7 +449,6 @@ def test_qio_with_uri_transport_config(tmp_path):
 
 def test_qio_with_both_uri_configs(tmp_path):
     """Qio works with both broker and transport as URIs."""
-    import os
 
     # Create config with both URIs
     config_dir = tmp_path / "both_uri_config"
@@ -497,7 +489,6 @@ def test_qio_with_both_uri_configs(tmp_path):
 
 def test_qio_with_invalid_broker_uri_scheme(tmp_path):
     """Qio fails with invalid URI scheme for broker."""
-    import os
 
     # Create config with invalid broker URI scheme
     config_dir = tmp_path / "invalid_broker_uri"
@@ -535,9 +526,94 @@ def test_qio_with_invalid_broker_uri_scheme(tmp_path):
         ROUTINE_REGISTRY.update(original_registry)
 
 
+def test_qio_with_both_environment_variables(tmp_path, monkeypatch):
+    """Qio prefers both environment variables over config."""
+
+    # Create config with different broker/transport
+    config_dir = tmp_path / "env_both_test"
+    config_dir.mkdir()
+    config_file = config_dir / "pyproject.toml"
+    config_content = """
+        [project]
+        name = "test-project-env-both"
+        version = "0.1.0"
+
+        [tool.qio]
+        broker = "pika://config:5672"
+        transport = "pika://config:5672"
+        """
+    config_file.write_text(config_content)
+
+    # Change to config directory
+    original_cwd = os.getcwd()
+    os.chdir(config_dir)
+
+    # Clear registry to isolate test
+    original_registry = dict(ROUTINE_REGISTRY)
+    ROUTINE_REGISTRY.clear()
+
+    # Set both environment variables to use localhost (which works)
+    monkeypatch.setenv("QIO_BROKER", "pika://localhost:5672")
+    monkeypatch.setenv("QIO_TRANSPORT", "pika://localhost:5672")
+
+    try:
+        qio = Qio()
+        try:
+            # Should work with environment variables taking precedence
+            qio.purge(queue="test")
+        finally:
+            qio.shutdown()
+    finally:
+        os.chdir(original_cwd)
+        # Restore registry
+        ROUTINE_REGISTRY.clear()
+        ROUTINE_REGISTRY.update(original_registry)
+
+
+def test_qio_with_invalid_environment_broker(monkeypatch):
+    """Qio fails with invalid QIO_BROKER environment variable."""
+    # Set invalid environment variable
+    monkeypatch.setenv("QIO_BROKER", "redis://invalid:6379")
+
+    # Clear registry to isolate test
+    original_registry = dict(ROUTINE_REGISTRY)
+    ROUTINE_REGISTRY.clear()
+
+    try:
+        # Should raise ValueError for invalid URI scheme
+        with pytest.raises(
+            ValueError, match="URI scheme must be 'pika:', got: redis://invalid:6379"
+        ):
+            Qio()
+    finally:
+        # Restore registry
+        ROUTINE_REGISTRY.clear()
+        ROUTINE_REGISTRY.update(original_registry)
+
+
+def test_qio_with_invalid_environment_transport(monkeypatch):
+    """Qio fails with invalid QIO_TRANSPORT environment variable."""
+    # Set invalid environment variable
+    monkeypatch.setenv("QIO_TRANSPORT", "redis://invalid:6379")
+
+    # Clear registry to isolate test
+    original_registry = dict(ROUTINE_REGISTRY)
+    ROUTINE_REGISTRY.clear()
+
+    try:
+        # Should raise ValueError for invalid URI scheme
+        with pytest.raises(
+            ValueError, match="URI scheme must be 'pika:', got: redis://invalid:6379"
+        ):
+            Qio()
+    finally:
+        # Restore registry
+        ROUTINE_REGISTRY.clear()
+        ROUTINE_REGISTRY.update(original_registry)
+
+
 def test_qio_with_invalid_transport_uri_scheme(tmp_path):
     """Qio fails with invalid URI scheme for transport."""
-    import os
 
     # Create config with invalid transport URI scheme
     config_dir = tmp_path / "invalid_transport_uri"

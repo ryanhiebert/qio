@@ -1,4 +1,5 @@
 import importlib
+import os
 import tomllib
 from collections.abc import Generator
 from collections.abc import Iterable
@@ -61,8 +62,10 @@ class Qio:
         return {}
 
     def __default_broker(self) -> Broker:
-        config = self.__config()
-        broker_uri = config.get("broker", "pika://localhost:5672")
+        broker_uri = os.environ.get("QIO_BROKER")
+        if not broker_uri:
+            config = self.__config()
+            broker_uri = config.get("broker", "pika://localhost:5672")
 
         if not broker_uri.startswith("pika:"):
             raise ValueError(f"URI scheme must be 'pika:', got: {broker_uri}")
@@ -72,8 +75,10 @@ class Qio:
         return PikaBroker.from_uri(broker_uri)
 
     def __default_transport(self) -> Transport:
-        config = self.__config()
-        transport_uri = config.get("transport", "pika://localhost:5672")
+        transport_uri = os.environ.get("QIO_TRANSPORT")
+        if not transport_uri:
+            config = self.__config()
+            transport_uri = config.get("transport", "pika://localhost:5672")
 
         if not transport_uri.startswith("pika:"):
             raise ValueError(f"URI scheme must be 'pika:', got: {transport_uri}")
