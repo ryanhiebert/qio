@@ -55,10 +55,10 @@ class Broker(ABC):
         raise NotImplementedError("Subclasses must implement this method.")
 
     @abstractmethod
-    def resume(self, message: Message, /):
-        """Report that the processing of a message has resumed.
+    def unsuspend(self, message: Message, /):
+        """Report that the processing of a message has been unsuspended.
 
-        The processing of the message may suspend again, or it may complete.
+        It is expected to resume shortly.
         """
         raise NotImplementedError("Subclasses must implement this method.")
 

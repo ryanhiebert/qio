@@ -121,8 +121,8 @@ class BaseBrokerTest:
         thread.join(timeout=0.1)
         assert len(consumed_messages) == 3
 
-        # Resume first message - should consume capacity again
-        broker.resume(consumed_messages[0])
+        # Unsuspend first message - should consume capacity again
+        broker.unsuspend(consumed_messages[0])
 
         broker.shutdown()
         thread.join(timeout=1.0)  # Clean up thread

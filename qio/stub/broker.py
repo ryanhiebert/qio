@@ -54,7 +54,7 @@ class StubBroker(Broker):
         if consumer:
             consumer.ack()
 
-    def resume(self, message: Message, /):
+    def unsuspend(self, message: Message, /):
         if message in self.__suspended:
             self.__suspended.discard(message)
             self.__processing.add(message)

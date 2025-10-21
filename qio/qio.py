@@ -219,6 +219,7 @@ class Qio:
                 invocation_id=invocation.id, generator=generator, value=value
             )
         )
+        self.__broker.unsuspend(self.__invocations[invocation])
 
     def throw(self, invocation: Invocation, generator: Generator, exception: Exception):
         """Signal that a suspension has thrown an exception."""
@@ -230,10 +231,10 @@ class Qio:
                 invocation_id=invocation.id, generator=generator, exception=exception
             )
         )
+        self.__broker.unsuspend(self.__invocations[invocation])
 
     def resume(self, invocation: Invocation):
         """Signal that the invocation is resuming."""
-        self.__broker.resume(self.__invocations[invocation])
         self.__bus.publish(InvocationResumed(invocation_id=invocation.id))
 
     def succeed(self, invocation: Invocation, value: Any):

@@ -79,8 +79,8 @@ class PikaBroker(Broker):
         consumer, tag = self.__messages[message]
         consumer.ack(tag)
 
-    def resume(self, message: Message, /):
-        """Report that the processing of a message has resumed."""
+    def unsuspend(self, message: Message, /):
+        """Report that the processing of a message has stopped being suspended."""
         pass  # Message has already been acked, do nothing.
 
     def complete(self, message: Message, /):
