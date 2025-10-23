@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from random import randrange
 
 from qio.broker import Broker
-from qio.broker import Message
+from qio.message import Message
 from qio.queue import Queue
 from qio.queue import ShutDown
 from qio.queuespec import QueueSpec

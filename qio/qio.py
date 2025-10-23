@@ -8,7 +8,6 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .broker import Broker
-from .broker import Message
 from .bus import Bus
 from .consumer import Consumer
 from .invocation import Invocation
@@ -17,6 +16,7 @@ from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import deserialize
 from .invocation import serialize
+from .message import Message
 from .queue import Queue
 from .queue import ShutDown
 from .queuespec import QueueSpec

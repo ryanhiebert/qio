@@ -1,24 +1,18 @@
 from abc import ABC
 from abc import abstractmethod
 from collections.abc import Iterator
-from dataclasses import dataclass
 
+from .message import Message
 from .queuespec import QueueSpec
 
 
-@dataclass(eq=False, frozen=True)
-class Message:
-    """A message from a broker.
-
-    Messages are assumed to be idempotent, and may be processed
-    multiple times in some non-typical situations.
-    """
-
-    body: bytes
-
-
 class Broker(ABC):
-    """A broker enables producing and consuming messages on a queue."""
+    """A broker enables producing and consuming messages on a queue.
+
+    Messages sent by a broker are assumed to be idempotent, and may be
+    delivered multiple times in some conditions in order to ensure
+    at-least-once delivery.
+    """
 
     @classmethod
     @abstractmethod

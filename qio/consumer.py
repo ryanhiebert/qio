@@ -4,7 +4,6 @@ from collections.abc import Iterator
 from typing import Any
 
 from .broker import Broker
-from .broker import Message
 from .bus import Bus
 from .invocation import Invocation
 from .invocation import InvocationContinued
@@ -17,6 +16,7 @@ from .invocation import InvocationThrew
 from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
+from .message import Message
 from .suspension import Suspension
 
 

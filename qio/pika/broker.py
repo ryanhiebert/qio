@@ -9,7 +9,7 @@ from pika import ConnectionParameters
 from pika import URLParameters
 
 from qio.broker import Broker
-from qio.broker import Message
+from qio.message import Message
 from qio.queuespec import QueueSpec
 
 
