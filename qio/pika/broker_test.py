@@ -22,9 +22,9 @@ class TestPikaBroker(BaseBrokerTest):
         assert isinstance(broker, PikaBroker)
         broker.shutdown()
 
-    def test_consume_rejects_multiple_queues(self, broker):
+    def test_receive_rejects_multiple_queues(self, broker):
         """Verify broker rejects QueueSpec with multiple queues."""
         queuespec = QueueSpec(queues=["queue1", "queue2"], concurrency=2)
 
         with pytest.raises(ValueError, match="Only one queue is supported"):
-            list(broker.consume(queuespec))
+            list(broker.receive(queuespec))

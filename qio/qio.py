@@ -173,8 +173,7 @@ class Qio:
     def consume(self, queuespec: QueueSpec, /) -> Consumer:
         return Consumer(
             bus=self.__bus,
-            broker=self.__broker,
-            consumer=self.__broker.consume(queuespec),
+            receiver=self.__broker.receive(queuespec),
             deserialize=deserialize,
         )
 

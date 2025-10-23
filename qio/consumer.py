@@ -1,9 +1,9 @@
 from collections.abc import Callable
 from collections.abc import Generator
+from collections.abc import Iterable
 from collections.abc import Iterator
 from typing import Any
 
-from .broker import Broker
 from .bus import Bus
 from .invocation import Invocation
 from .invocation import InvocationContinued
@@ -17,33 +17,31 @@ from .invocation import LocalInvocationContinued
 from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
 from .message import Message
+from .receiver import Receiver
 from .suspension import Suspension
 
 
-class Consumer(Iterator[Invocation]):
+class Consumer(Iterable[Invocation]):
     def __init__(
         self,
         *,
         bus: Bus,
-        broker: Broker,
-        consumer: Iterator[Message],
+        receiver: Receiver,
         deserialize: Callable[[bytes], Invocation],
     ):
         self.__bus = bus
-        self.__broker = broker
-        self.__consumer = consumer
+        self.__receiver = receiver
         self.__deserialize = deserialize
         self.__invocations = dict[Invocation, Message]()
 
-    def __next__(self) -> Invocation:
-        message = next(self.__consumer)
-        invocation = self.__deserialize(message.body)
-        self.__invocations[invocation] = message
-        return invocation
+    def __iter__(self) -> Iterator[Invocation]:
+        for message in self.__receiver:
+            invocation = self.__deserialize(message.body)
+            self.__invocations[invocation] = message
+            yield invocation
 
     def start(self, invocation: Invocation):
         """Signal that the invocation is starting."""
-        self.__broker.start(self.__invocations[invocation])
         self.__bus.publish(InvocationStarted(invocation_id=invocation.id))
 
     def suspend(
@@ -63,7 +61,7 @@ class Consumer(Iterator[Invocation]):
                     generator=generator,
                 )
             )
-        self.__broker.suspend(self.__invocations[invocation])
+        self.__receiver.pause(self.__invocations[invocation])
 
     def resolve(self, invocation: Invocation, generator: Generator, value: Any):
         """Signal that a suspension has resolved to a value."""
@@ -75,7 +73,7 @@ class Consumer(Iterator[Invocation]):
                 invocation_id=invocation.id, generator=generator, value=value
             )
         )
-        self.__broker.unsuspend(self.__invocations[invocation])
+        self.__receiver.unpause(self.__invocations[invocation])
 
     def throw(self, invocation: Invocation, generator: Generator, exception: Exception):
         """Signal that a suspension has thrown an exception."""
@@ -87,7 +85,7 @@ class Consumer(Iterator[Invocation]):
                 invocation_id=invocation.id, generator=generator, exception=exception
             )
         )
-        self.__broker.unsuspend(self.__invocations[invocation])
+        self.__receiver.unpause(self.__invocations[invocation])
 
     def resume(self, invocation: Invocation):
         """Signal that the invocation is resuming."""
@@ -98,11 +96,11 @@ class Consumer(Iterator[Invocation]):
         self.__bus.publish(
             InvocationSucceeded(invocation_id=invocation.id, value=value)
         )
-        self.__broker.complete(self.__invocations.pop(invocation))
+        self.__receiver.finish(self.__invocations.pop(invocation))
 
     def error(self, invocation: Invocation, exception: Exception):
         """Signal that the invocation has errored."""
         self.__bus.publish(
             InvocationErrored(invocation_id=invocation.id, exception=exception)
         )
-        self.__broker.complete(self.__invocations.pop(invocation))
+        self.__receiver.finish(self.__invocations.pop(invocation))

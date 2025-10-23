@@ -66,24 +66,24 @@ class BaseBrokerTest:
         for i in range(3):
             broker.enqueue(f"message{i}".encode(), queue="test-queue")
 
-        consumed_messages = []
+        received_messages = []
         prefetch_limit = 2
 
-        def consume_messages():
+        def receive_messages():
             queuespec = QueueSpec(queues=["test-queue"], concurrency=prefetch_limit)
-            consumer = broker.consume(queuespec)
-            for message in consumer:
-                consumed_messages.append(message)
+            receiver = broker.receive(queuespec)
+            for message in receiver:
+                received_messages.append(message)
                 # Don't call start() - this should block after prefetch_limit messages
 
-        thread = threading.Thread(target=consume_messages)
+        thread = threading.Thread(target=receive_messages)
         thread.start()
 
-        # Wait for consumer to reach prefetch limit or timeout
+        # Wait for receiver to reach prefetch limit or timeout
         thread.join(timeout=1.0)
 
-        # Should have consumed exactly prefetch_limit messages and be blocked
-        assert len(consumed_messages) == prefetch_limit
+        # Should have received exactly prefetch_limit messages and be blocked
+        assert len(received_messages) == prefetch_limit
         assert thread.is_alive()  # Thread should still be alive (blocked)
 
         broker.shutdown()
@@ -98,31 +98,30 @@ class BaseBrokerTest:
         for i in range(3):
             broker.enqueue(f"msg{i}".encode(), queue="test-queue")
 
-        consumed_messages = []
+        received_messages = []
         prefetch_limit = 2
+        queuespec = QueueSpec(queues=["test-queue"], concurrency=prefetch_limit)
+        receiver = broker.receive(queuespec)
 
-        def consume_messages():
-            queuespec = QueueSpec(queues=["test-queue"], concurrency=prefetch_limit)
-            consumer = broker.consume(queuespec)
-            for message in consumer:
-                consumed_messages.append(message)
-                broker.start(message)
+        def receive_messages():
+            for message in receiver:
+                received_messages.append(message)
 
-        thread = threading.Thread(target=consume_messages)
+        thread = threading.Thread(target=receive_messages)
         thread.start()
 
         # Wait for initial consumption up to prefetch limit
         thread.join(timeout=0.1)
-        assert len(consumed_messages) == prefetch_limit
+        assert len(received_messages) == prefetch_limit
         assert thread.is_alive()  # Should be blocked
 
-        # Suspend first message - should free capacity for third message
-        broker.suspend(consumed_messages[0])
+        # Pause first message - should free capacity for third message
+        receiver.pause(received_messages[0])
         thread.join(timeout=0.1)
-        assert len(consumed_messages) == 3
+        assert len(received_messages) == 3
 
-        # Unsuspend first message - should consume capacity again
-        broker.unsuspend(consumed_messages[0])
+        # Unpause first message - should receive capacity again
+        receiver.unpause(received_messages[0])
 
         broker.shutdown()
         thread.join(timeout=1.0)  # Clean up thread
@@ -136,76 +135,73 @@ class BaseBrokerTest:
         for i in range(4):
             broker.enqueue(f"test{i}".encode(), queue="test-queue")
 
-        consumed_messages = []
+        received_messages = []
         prefetch_limit = 2
+        queuespec = QueueSpec(queues=["test-queue"], concurrency=prefetch_limit)
+        receiver = broker.receive(queuespec)
 
-        def consume_messages():
-            queuespec = QueueSpec(queues=["test-queue"], concurrency=prefetch_limit)
-            consumer = broker.consume(queuespec)
-            for message in consumer:
-                consumed_messages.append(message)
-                broker.start(message)
+        def receive_messages():
+            for message in receiver:
+                received_messages.append(message)
 
-        thread = threading.Thread(target=consume_messages)
+        thread = threading.Thread(target=receive_messages)
         thread.start()
 
         # Initial consumption up to prefetch limit
         thread.join(timeout=0.1)
-        assert len(consumed_messages) == prefetch_limit
+        assert len(received_messages) == prefetch_limit
         assert thread.is_alive()  # Should be blocked
 
-        # Complete first message - should allow consuming third message
-        broker.complete(consumed_messages[0])
+        # Finish first message - should allow consuming third message
+        receiver.finish(received_messages[0])
         thread.join(timeout=0.1)
-        assert len(consumed_messages) == 3
+        assert len(received_messages) == 3
 
-        # Complete second message - should allow consuming fourth message
-        broker.complete(consumed_messages[1])
+        # Finish second message - should allow consuming fourth message
+        receiver.finish(received_messages[1])
         thread.join(timeout=0.1)
-        assert len(consumed_messages) == 4
+        assert len(received_messages) == 4
 
         broker.shutdown()
         thread.join(timeout=1.0)  # Clean up thread
 
     @pytest.mark.timeout(2)
-    def test_multiple_consumers_independent_prefetch_limits(self, broker):
-        """Verify multiple consumers operate with independent prefetch limits."""
+    def test_multiple_receivers_independent_prefetch_limits(self, broker):
+        """Verify multiple receivers operate with independent prefetch limits."""
         broker.purge(queue="test-queue")
 
-        # Enqueue enough messages for both consumers
+        # Enqueue enough messages for both receivers
         for i in range(5):
             broker.enqueue(f"msg{i}".encode(), queue="test-queue")
 
-        consumer1_messages = []
-        consumer2_messages = []
+        receiver1_messages = []
+        receiver2_messages = []
 
-        def consume_with_limit_2():
+        def receive_with_limit_2():
             queuespec = QueueSpec(queues=["test-queue"], concurrency=2)
-            consumer = broker.consume(queuespec)
-            for message in consumer:
-                consumer1_messages.append(message)
-                broker.start(message)
+            receiver = broker.receive(queuespec)
+            for message in receiver:
+                receiver1_messages.append(message)
 
-        def consume_with_limit_3():
+        def receive_with_limit_3():
             queuespec = QueueSpec(queues=["test-queue"], concurrency=3)
-            consumer = broker.consume(queuespec)
-            for message in consumer:
-                consumer2_messages.append(message)
-                broker.start(message)
+            receiver = broker.receive(queuespec)
+            for message in receiver:
+                receiver2_messages.append(message)
 
-        thread1 = threading.Thread(target=consume_with_limit_2)
-        thread2 = threading.Thread(target=consume_with_limit_3)
+        thread1 = threading.Thread(target=receive_with_limit_2)
+        thread2 = threading.Thread(target=receive_with_limit_3)
 
         thread1.start()
         thread2.start()
 
-        # Allow both consumers to consume up to their limits
+        # Allow both receivers to receive up to their limits
         thread1.join(timeout=0.1)
         thread2.join(timeout=0.1)
 
-        # Both consumers should respect their prefetch limits and be blocked
-        total_consumed = len(consumer1_messages) + len(consumer2_messages)
-        assert total_consumed == 5  # All messages consumed (2+3=5)
+        # Both receivers should respect their prefetch limits and be blocked
+        total_received = len(receiver1_messages) + len(receiver2_messages)
+        assert total_received == 5  # All messages received (2+3=5)
         assert thread1.is_alive()  # Both should be blocked
         assert thread2.is_alive()
 
@@ -213,16 +209,16 @@ class BaseBrokerTest:
         thread1.join(timeout=1.0)  # Clean up threads
         thread2.join(timeout=1.0)
 
-    def test_consume_rejects_empty_queues(self, broker):
+    def test_receive_rejects_empty_queues(self, broker):
         """Verify broker rejects QueueSpec with no queues."""
         queuespec = QueueSpec(queues=[], concurrency=2)
 
-        with pytest.raises(ValueError, match="QueueSpec must have at least one queue"):
-            list(broker.consume(queuespec))
+        with pytest.raises(ValueError, match="Must specify at least one queue"):
+            list(broker.receive(queuespec))
 
     @skip_if_unsupported("supports_multiple_queues")
-    def test_consume_supports_multiple_queues(self, broker):
-        """Verify broker can consume from multiple queues."""
+    def test_receive_supports_multiple_queues(self, broker):
+        """Verify broker can receive from multiple queues."""
         broker.purge(queue="queue1")
         broker.purge(queue="queue2")
 
@@ -232,25 +228,24 @@ class BaseBrokerTest:
         broker.enqueue(b"msg3", queue="queue1")
 
         queuespec = QueueSpec(queues=["queue1", "queue2"], concurrency=3)
-        consumed_messages = []
+        received_messages = []
 
-        def consume_messages():
-            consumer = broker.consume(queuespec)
-            for message in consumer:
-                consumed_messages.append(message.body)
-                broker.start(message)
-                if len(consumed_messages) >= 3:
+        def receive_messages():
+            receiver = broker.receive(queuespec)
+            for message in receiver:
+                received_messages.append(message.body)
+                if len(received_messages) >= 3:
                     break
 
-        thread = threading.Thread(target=consume_messages)
+        thread = threading.Thread(target=receive_messages)
         thread.start()
         thread.join(timeout=1.0)
 
-        # Should consume all 3 messages from both queues
-        assert len(consumed_messages) == 3
-        assert b"msg1" in consumed_messages
-        assert b"msg2" in consumed_messages
-        assert b"msg3" in consumed_messages
+        # Should receive all 3 messages from both queues
+        assert len(received_messages) == 3
+        assert b"msg1" in received_messages
+        assert b"msg2" in received_messages
+        assert b"msg3" in received_messages
 
         broker.shutdown()
         thread.join(timeout=1.0)  # Clean up thread
@@ -269,27 +264,26 @@ class BaseBrokerTest:
         broker.enqueue(b"message_b", queue="also_filled")
         broker.enqueue(b"message_c", queue="filled")
 
-        consumed_messages = []
+        received_messages = []
         queuespec = QueueSpec(
             queues=["empty1", "filled", "empty2", "also_filled"], concurrency=3
         )
 
-        def consume_messages():
-            consumer = broker.consume(queuespec)
-            for message in consumer:
-                consumed_messages.append(message.body)
-                broker.start(message)
-                if len(consumed_messages) >= 3:
+        def receive_messages():
+            receiver = broker.receive(queuespec)
+            for message in receiver:
+                received_messages.append(message.body)
+                if len(received_messages) >= 3:
                     break
 
-        thread = threading.Thread(target=consume_messages)
+        thread = threading.Thread(target=receive_messages)
         thread.start()
         thread.join(timeout=1.0)
 
-        # Should consume all 3 messages from the non-empty queues
-        assert len(consumed_messages) == 3
+        # Should receive all 3 messages from the non-empty queues
+        assert len(received_messages) == 3
         expected_messages = {b"message_a", b"message_b", b"message_c"}
-        assert set(consumed_messages) == expected_messages
+        assert set(received_messages) == expected_messages
 
         broker.shutdown()
         thread.join(timeout=1.0)  # Clean up thread
@@ -311,8 +305,8 @@ class BaseBrokerTest:
             broker.enqueue(f"priority_{i}".encode(), queue="priority_queue")
             broker.enqueue(f"normal_{i}".encode(), queue="normal_queue")
 
-        consumed_messages = []
-        selection_order = []  # Track the order messages were consumed
+        received_messages = []
+        selection_order = []  # Track the order messages were received
 
         # List priority_queue 3 times, normal_queue once
         # This gives priority_queue 3 out of 4 chances to be selected
@@ -326,30 +320,29 @@ class BaseBrokerTest:
             concurrency=40,
         )
 
-        def consume_messages():
-            consumer = broker.consume(queuespec)
-            for message in consumer:
+        def receive_messages():
+            receiver = broker.receive(queuespec)
+            for message in receiver:
                 msg_text = message.body.decode()
-                consumed_messages.append(msg_text)
+                received_messages.append(msg_text)
                 if msg_text.startswith("priority_"):
                     selection_order.append("P")
                 else:
                     selection_order.append("N")
-                broker.start(message)
-                if len(consumed_messages) >= 40:
+                if len(received_messages) >= 40:
                     break
 
-        thread = threading.Thread(target=consume_messages)
+        thread = threading.Thread(target=receive_messages)
         thread.start()
         thread.join(timeout=2.0)
 
-        # Should consume all 40 messages
-        assert len(consumed_messages) == 40
+        # Should receive all 40 messages
+        assert len(received_messages) == 40
 
         priority_count = selection_order.count("P")
         normal_count = selection_order.count("N")
 
-        # Both queues should be fully consumed
+        # Both queues should be fully received
         assert priority_count == 20
         assert normal_count == 20
 
@@ -412,35 +405,34 @@ class BaseBrokerTest:
             broker.enqueue(f"msg1_{i}".encode(), queue="queue1")
             broker.enqueue(f"msg2_{i}".encode(), queue="queue2")
 
-        consumed_messages = []
+        received_messages = []
         selection_order = []
 
         # Put empty queue in middle to test the cycling bug
         queuespec = QueueSpec(queues=["queue1", "empty", "queue2"], concurrency=24)
 
-        def consume_messages():
-            consumer = broker.consume(queuespec)
-            for message in consumer:
+        def receive_messages():
+            receiver = broker.receive(queuespec)
+            for message in receiver:
                 msg_text = message.body.decode()
-                consumed_messages.append(msg_text)
+                received_messages.append(msg_text)
                 if "msg1_" in msg_text:
                     selection_order.append("1")
                 else:
                     selection_order.append("2")
-                broker.start(message)
-                if len(consumed_messages) >= 24:
+                if len(received_messages) >= 24:
                     break
 
-        thread = threading.Thread(target=consume_messages)
+        thread = threading.Thread(target=receive_messages)
         thread.start()
         thread.join(timeout=2.0)
 
-        assert len(consumed_messages) == 24
+        assert len(received_messages) == 24
 
         queue1_count = selection_order.count("1")
         queue2_count = selection_order.count("2")
 
-        # Both queues should be fully consumed
+        # Both queues should be fully received
         assert queue1_count == 12
         assert queue2_count == 12
 

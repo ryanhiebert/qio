@@ -1,13 +1,12 @@
 from abc import ABC
 from abc import abstractmethod
-from collections.abc import Iterator
 
-from .message import Message
 from .queuespec import QueueSpec
+from .receiver import Receiver
 
 
 class Broker(ABC):
-    """A broker enables producing and consuming messages on a queue.
+    """A broker enables sending and receiving messages with a queue.
 
     Messages sent by a broker are assumed to be idempotent, and may be
     delivered multiple times in some conditions in order to ensure
@@ -31,37 +30,8 @@ class Broker(ABC):
         raise NotImplementedError("Subclasses must implement this method.")
 
     @abstractmethod
-    def consume(self, queuespec: QueueSpec, /) -> Iterator[Message]:
-        """Consume messages from the queue."""
-        raise NotImplementedError("Subclasses must implement this method.")
-
-    @abstractmethod
-    def start(self, _: Message, /):
-        """Report that processing of a message has started."""
-        raise NotImplementedError("Subclasses must implement this method.")
-
-    @abstractmethod
-    def suspend(self, message: Message, /):
-        """Report that the processing of a message has been suspended.
-
-        The message is not completed, and is expected to resume.
-        """
-        raise NotImplementedError("Subclasses must implement this method.")
-
-    @abstractmethod
-    def unsuspend(self, message: Message, /):
-        """Report that the processing of a message has been unsuspended.
-
-        It is expected to resume shortly.
-        """
-        raise NotImplementedError("Subclasses must implement this method.")
-
-    @abstractmethod
-    def complete(self, message: Message, /):
-        """Report that the processing of a message has completed.
-
-        When complete, no other worker will need to process the message again.
-        """
+    def receive(self, queuespec: QueueSpec, /) -> Receiver:
+        """Receive messages as specified by the QueueSpec."""
         raise NotImplementedError("Subclasses must implement this method.")
 
     @abstractmethod
