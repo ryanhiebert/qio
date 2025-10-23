@@ -6,23 +6,15 @@ from collections.abc import Iterable
 from concurrent.futures import Future
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
 
 from .broker import Broker
 from .broker import Message
 from .bus import Bus
+from .consumer import Consumer
 from .invocation import Invocation
-from .invocation import InvocationContinued
 from .invocation import InvocationErrored
-from .invocation import InvocationResumed
-from .invocation import InvocationStarted
 from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
-from .invocation import InvocationSuspended
-from .invocation import InvocationThrew
-from .invocation import LocalInvocationContinued
-from .invocation import LocalInvocationSuspended
-from .invocation import LocalInvocationThrew
 from .invocation import deserialize
 from .invocation import serialize
 from .queue import Queue
@@ -30,7 +22,6 @@ from .queue import ShutDown
 from .queuespec import QueueSpec
 from .registry import ROUTINE_REGISTRY
 from .routine import Routine
-from .suspension import Suspension
 from .thread import Thread
 from .transport import Transport
 
@@ -179,77 +170,13 @@ class Qio:
         queue = routine.queue
         self.__broker.enqueue(serialize(invocation), queue=queue)
 
-    def consume(self, queuespec: QueueSpec, /) -> Generator[Invocation]:
-        for message in self.__broker.consume(queuespec):
-            invocation = deserialize(message.body)
-            self.__invocations[invocation] = message
-            yield invocation
-
-    def start(self, invocation: Invocation):
-        """Signal that the invocation is starting."""
-        self.__broker.start(self.__invocations[invocation])
-        self.__bus.publish(InvocationStarted(invocation_id=invocation.id))
-
-    def suspend(
-        self,
-        invocation: Invocation,
-        generator: Generator,
-        suspension: Suspension | None,
-    ):
-        """Signal that the invocation has suspended."""
-        if suspension:
-            self.__bus.publish(InvocationSuspended(invocation_id=invocation.id))
-            self.__bus.publish_local(
-                LocalInvocationSuspended(
-                    invocation_id=invocation.id,
-                    suspension=suspension,
-                    invocation=invocation,
-                    generator=generator,
-                )
-            )
-        self.__broker.suspend(self.__invocations[invocation])
-
-    def resolve(self, invocation: Invocation, generator: Generator, value: Any):
-        """Signal that a suspension has resolved to a value."""
-        self.__bus.publish(
-            InvocationContinued(invocation_id=invocation.id, value=value)
+    def consume(self, queuespec: QueueSpec, /) -> Consumer:
+        return Consumer(
+            bus=self.__bus,
+            broker=self.__broker,
+            consumer=self.__broker.consume(queuespec),
+            deserialize=deserialize,
         )
-        self.__bus.publish_local(
-            LocalInvocationContinued(
-                invocation_id=invocation.id, generator=generator, value=value
-            )
-        )
-        self.__broker.unsuspend(self.__invocations[invocation])
-
-    def throw(self, invocation: Invocation, generator: Generator, exception: Exception):
-        """Signal that a suspension has thrown an exception."""
-        self.__bus.publish(
-            InvocationThrew(invocation_id=invocation.id, exception=exception)
-        )
-        self.__bus.publish_local(
-            LocalInvocationThrew(
-                invocation_id=invocation.id, generator=generator, exception=exception
-            )
-        )
-        self.__broker.unsuspend(self.__invocations[invocation])
-
-    def resume(self, invocation: Invocation):
-        """Signal that the invocation is resuming."""
-        self.__bus.publish(InvocationResumed(invocation_id=invocation.id))
-
-    def succeed(self, invocation: Invocation, value: Any):
-        """Signal that the invocation has succeeded."""
-        self.__bus.publish(
-            InvocationSucceeded(invocation_id=invocation.id, value=value)
-        )
-        self.__broker.complete(self.__invocations.pop(invocation))
-
-    def error(self, invocation: Invocation, exception: Exception):
-        """Signal that the invocation has errored."""
-        self.__bus.publish(
-            InvocationErrored(invocation_id=invocation.id, exception=exception)
-        )
-        self.__broker.complete(self.__invocations.pop(invocation))
 
     def shutdown(self):
         """Shut down all components."""

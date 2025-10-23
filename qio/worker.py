@@ -132,7 +132,7 @@ class Worker:
                     continuation = waiting.pop(future)
                     value = future.result()
                 except Exception as exception:
-                    self.__qio.throw(
+                    self.__consumer.throw(
                         continuation.invocation, continuation.generator, exception
                     )
                     with suppress(ShutDown):
@@ -144,7 +144,7 @@ class Worker:
                             )
                         )
                 else:
-                    self.__qio.resolve(
+                    self.__consumer.resolve(
                         continuation.invocation, continuation.generator, value
                     )
                     with suppress(ShutDown):
@@ -179,10 +179,10 @@ class Worker:
 
             match task:
                 case Invocation() as invocation:
-                    self.__qio.start(invocation)
+                    self.__consumer.start(invocation)
                     self.__run_invocation(invocation)
                 case SendContinuation() | ThrowContinuation() as continuation:
-                    self.__qio.resume(continuation.invocation)
+                    self.__consumer.resume(continuation.invocation)
                     self.__run_continuation(continuation)
 
     def __run_invocation(self, invocation: Invocation):
@@ -191,7 +191,7 @@ class Worker:
         try:
             result = routine.fn(*invocation.args, **invocation.kwargs)
         except Exception as exception:
-            self.__qio.error(invocation, exception)
+            self.__consumer.error(invocation, exception)
         else:
             if isinstance(result, Awaitable):
                 generator = result.__await__()
@@ -203,7 +203,7 @@ class Worker:
                     )
                 )
             else:
-                self.__qio.succeed(invocation, result)
+                self.__consumer.succeed(invocation, result)
 
     def __run_continuation(self, continuation: SendContinuation | ThrowContinuation):
         """Process a continuation task."""
@@ -216,11 +216,11 @@ class Worker:
         try:
             suspension = method()
         except StopIteration as stop:
-            self.__qio.succeed(continuation.invocation, stop.value)
+            self.__consumer.succeed(continuation.invocation, stop.value)
         except Exception as exception:
-            self.__qio.error(continuation.invocation, exception)
+            self.__consumer.error(continuation.invocation, exception)
         else:
-            self.__qio.suspend(
+            self.__consumer.suspend(
                 continuation.invocation, continuation.generator, suspension
             )
 
