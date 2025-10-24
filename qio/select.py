@@ -24,7 +24,7 @@ class Selector[R = None](ABC):
         raise NotImplementedError
 
 
-class SelectorGuard[R](AbstractContextManager[Selector[R]], ABC):
+class SelectorGuard[R](AbstractContextManager[Selector[R] | None], ABC):
     @abstractmethod
     def __enter__(self) -> Selector[R] | None:
         raise NotImplementedError

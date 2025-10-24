@@ -30,7 +30,7 @@ jobs:
         run: uv run ruff format --check
       - name: Run ruff linting
         run: uv run ruff check
-      - name: Run pyright
-        run: uv run pyright
+      - name: Run basedpyright
+        run: uv run basedpyright
       - name: Run tests
         run: uv run pytest

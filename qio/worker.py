@@ -128,8 +128,8 @@ class Worker:
                 if not future.done() or future.cancelled():
                     continue
 
+                continuation = waiting.pop(future)
                 try:
-                    continuation = waiting.pop(future)
                     value = future.result()
                 except Exception as exception:
                     self.__consumer.throw(
