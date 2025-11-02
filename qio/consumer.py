@@ -4,7 +4,6 @@ from collections.abc import Iterable
 from collections.abc import Iterator
 from typing import Any
 
-from .bus import Bus
 from .invocation import Invocation
 from .invocation import InvocationContinued
 from .invocation import InvocationErrored
@@ -18,6 +17,7 @@ from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
 from .message import Message
 from .receiver import Receiver
+from .stream import Stream
 from .suspension import Suspension
 
 
@@ -25,11 +25,11 @@ class Consumer(Iterable[Invocation]):
     def __init__(
         self,
         *,
-        bus: Bus,
+        stream: Stream,
         receiver: Receiver,
         deserialize: Callable[[bytes], Invocation],
     ):
-        self.__bus = bus
+        self.__stream = stream
         self.__receiver = receiver
         self.__deserialize = deserialize
         self.__invocations = dict[Invocation, Message]()
@@ -42,7 +42,7 @@ class Consumer(Iterable[Invocation]):
 
     def start(self, invocation: Invocation):
         """Signal that the invocation is starting."""
-        self.__bus.publish(InvocationStarted(invocation_id=invocation.id))
+        self.__stream.publish(InvocationStarted(invocation_id=invocation.id))
 
     def suspend(
         self,
@@ -52,8 +52,8 @@ class Consumer(Iterable[Invocation]):
     ):
         """Signal that the invocation has suspended."""
         if suspension:
-            self.__bus.publish(InvocationSuspended(invocation_id=invocation.id))
-            self.__bus.publish_local(
+            self.__stream.publish(InvocationSuspended(invocation_id=invocation.id))
+            self.__stream.publish_local(
                 LocalInvocationSuspended(
                     invocation_id=invocation.id,
                     suspension=suspension,
@@ -65,10 +65,10 @@ class Consumer(Iterable[Invocation]):
 
     def resolve(self, invocation: Invocation, generator: Generator, value: Any):
         """Signal that a suspension has resolved to a value."""
-        self.__bus.publish(
+        self.__stream.publish(
             InvocationContinued(invocation_id=invocation.id, value=value)
         )
-        self.__bus.publish_local(
+        self.__stream.publish_local(
             LocalInvocationContinued(
                 invocation_id=invocation.id, generator=generator, value=value
             )
@@ -77,10 +77,10 @@ class Consumer(Iterable[Invocation]):
 
     def throw(self, invocation: Invocation, generator: Generator, exception: Exception):
         """Signal that a suspension has thrown an exception."""
-        self.__bus.publish(
+        self.__stream.publish(
             InvocationThrew(invocation_id=invocation.id, exception=exception)
         )
-        self.__bus.publish_local(
+        self.__stream.publish_local(
             LocalInvocationThrew(
                 invocation_id=invocation.id, generator=generator, exception=exception
             )
@@ -89,18 +89,18 @@ class Consumer(Iterable[Invocation]):
 
     def resume(self, invocation: Invocation):
         """Signal that the invocation is resuming."""
-        self.__bus.publish(InvocationResumed(invocation_id=invocation.id))
+        self.__stream.publish(InvocationResumed(invocation_id=invocation.id))
 
     def succeed(self, invocation: Invocation, value: Any):
         """Signal that the invocation has succeeded."""
-        self.__bus.publish(
+        self.__stream.publish(
             InvocationSucceeded(invocation_id=invocation.id, value=value)
         )
         self.__receiver.finish(self.__invocations.pop(invocation))
 
     def error(self, invocation: Invocation, exception: Exception):
         """Signal that the invocation has errored."""
-        self.__bus.publish(
+        self.__stream.publish(
             InvocationErrored(invocation_id=invocation.id, exception=exception)
         )
         self.__receiver.finish(self.__invocations.pop(invocation))

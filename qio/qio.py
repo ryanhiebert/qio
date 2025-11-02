@@ -8,7 +8,6 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .broker import Broker
-from .bus import Bus
 from .consumer import Consumer
 from .invocation import Invocation
 from .invocation import InvocationErrored
@@ -16,14 +15,15 @@ from .invocation import InvocationSubmitted
 from .invocation import InvocationSucceeded
 from .invocation import deserialize
 from .invocation import serialize
+from .journal import Journal
 from .message import Message
 from .queue import Queue
 from .queue import ShutDown
 from .queuespec import QueueSpec
 from .registry import ROUTINE_REGISTRY
 from .routine import Routine
+from .stream import Stream
 from .thread import Thread
-from .transport import Transport
 
 
 class Qio:
@@ -31,10 +31,10 @@ class Qio:
         self,
         *,
         broker: Broker | None = None,
-        transport: Transport | None = None,
+        journal: Journal | None = None,
     ):
         self.__broker = broker or self.__default_broker()
-        self.__bus = Bus(transport or self.__default_transport())
+        self.__stream = Stream(journal or self.__default_journal())
         self.__invocations = dict[Invocation, Message]()
         self.__register_routines()
 
@@ -70,23 +70,23 @@ class Qio:
 
         return PikaBroker.from_uri(broker_uri)
 
-    def __default_transport(self) -> Transport:
-        transport_uri = os.environ.get("QIO_TRANSPORT")
-        if not transport_uri:
+    def __default_journal(self) -> Journal:
+        journal_uri = os.environ.get("QIO_JOURNAL")
+        if not journal_uri:
             config = self.__config()
-            transport_uri = config.get("transport")
-            if not transport_uri:
+            journal_uri = config.get("journal")
+            if not journal_uri:
                 raise ValueError(
-                    "No transport URI configured. Set QIO_TRANSPORT env var "
-                    "or add 'transport' to [tool.qio] in pyproject.toml"
+                    "No journal URI configured. Set JOURNAL env var "
+                    "or add 'journal' to [tool.qio] in pyproject.toml"
                 )
 
-        if not transport_uri.startswith("pika:"):
-            raise ValueError(f"URI scheme must be 'pika:', got: {transport_uri}")
+        if not journal_uri.startswith("pika:"):
+            raise ValueError(f"URI scheme must be 'pika:', got: {journal_uri}")
 
-        from .pika.transport import PikaTransport
+        from .pika.journal import PikaJournal
 
-        return PikaTransport.from_uri(transport_uri)
+        return PikaJournal.from_uri(journal_uri)
 
     def __register_routines(self):
         """Load routine modules from pyproject.toml."""
@@ -111,10 +111,10 @@ class Qio:
         return list(ROUTINE_REGISTRY.values())
 
     def subscribe[T](self, types: Iterable[type[T]]) -> Queue[T]:
-        return self.__bus.subscribe(types)
+        return self.__stream.subscribe(types)
 
     def unsubscribe(self, queue: Queue):
-        return self.__bus.unsubscribe(queue)
+        return self.__stream.unsubscribe(queue)
 
     @contextmanager
     def invocation_handler(self) -> Generator[Future]:
@@ -159,7 +159,7 @@ class Qio:
     def submit(self, invocation: Invocation, /):
         """Submit an invocation to be run in the background."""
         routine = self.routine(invocation.routine)
-        self.__bus.publish(
+        self.__stream.publish(
             InvocationSubmitted(
                 invocation_id=invocation.id,
                 routine=invocation.routine,
@@ -172,7 +172,7 @@ class Qio:
 
     def consume(self, queuespec: QueueSpec, /) -> Consumer:
         return Consumer(
-            bus=self.__bus,
+            stream=self.__stream,
             receiver=self.__broker.receive(queuespec),
             deserialize=deserialize,
         )
@@ -180,4 +180,4 @@ class Qio:
     def shutdown(self):
         """Shut down all components."""
         self.__broker.shutdown()
-        self.__bus.shutdown()
+        self.__stream.shutdown()

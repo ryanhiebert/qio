@@ -1,24 +1,24 @@
-"""Base test class for transport implementations.
+"""Base test class for journal implementations.
 
-Example usage for a new transport implementation:
+Example usage for a new journal implementation:
 
 ```python
-# qio/mytransport/transport_test.py
+# qio/myjournal/journal_test.py
 import pytest
-from qio.transport_test import BaseTransportTest
-from .transport import MyTransport
+from qio.journal_test import BaseJournalTest
+from .journal import MyJournal
 
-class TestMyTransport(BaseTransportTest):
+class TestMyJournal(BaseJournalTest):
 
     @pytest.fixture
-    def transport(self):
-        transport = MyTransport("connection_string")
-        yield transport
-        transport.shutdown()
+    def journal(self):
+        journal = MyJournal("connection_string")
+        yield journal
+        journal.shutdown()
 
-    # Add transport-specific tests here if needed
-    def test_my_transport_specific_feature(self, transport):
-        # Custom test for this transport implementation
+    # Add journal-specific tests here if needed
+    def test_my_journal_specific_feature(self, journal):
+        # Custom test for this journal implementation
         pass
 ```
 """
@@ -38,7 +38,7 @@ def skip_if_unsupported(feature_attr):
         @wraps(test_func)
         def wrapper(self, *args, **kwargs):
             if not getattr(self, feature_attr, True):
-                pytest.skip(f"Transport doesn't support {feature_attr}")
+                pytest.skip(f"Journal doesn't support {feature_attr}")
             return test_func(self, *args, **kwargs)
 
         return wrapper
@@ -46,62 +46,62 @@ def skip_if_unsupported(feature_attr):
     return decorator
 
 
-class BaseTransportTest:
-    """Base class with common tests for all transport implementations."""
+class BaseJournalTest:
+    """Base class with common tests for all journal implementations."""
 
     @pytest.fixture
-    def transport(self):
-        """Subclasses must implement this fixture to provide a transport instance."""
-        raise NotImplementedError("Subclasses must implement transport fixture")
+    def journal(self):
+        """Subclasses must implement this fixture to provide a journal instance."""
+        raise NotImplementedError("Subclasses must implement journal fixture")
 
     @pytest.mark.timeout(2)
-    def test_multiple_messages(self, transport):
+    def test_multiple_messages(self, journal):
         """Verify that multiple messages can be published and received in order."""
         messages = [b"message1", b"message2", b"message3"]
         for msg in messages:
-            transport.publish(msg)
+            journal.publish(msg)
 
-        subscriber = transport.subscribe()
+        subscriber = journal.subscribe()
         received_messages = list(itertools.islice(subscriber, len(messages)))
 
         assert len(received_messages) == len(messages)
         assert received_messages == messages
 
-        transport.shutdown()
+        journal.shutdown()
 
     @pytest.mark.timeout(2)
-    def test_shutdown(self, transport):
+    def test_shutdown(self, journal):
         """Verify that shutdown stops subscribers and they receive pending messages."""
-        transport.publish(b"test message 1")
-        transport.publish(b"test message 2")
+        journal.publish(b"test message 1")
+        journal.publish(b"test message 2")
 
         received_messages = []
 
         def subscriber_thread():
-            for message in transport.subscribe():
+            for message in journal.subscribe():
                 received_messages.append(message)
 
         thread = threading.Thread(target=subscriber_thread)
         thread.start()
 
         time.sleep(0.1)
-        transport.shutdown()
+        journal.shutdown()
 
         thread.join(timeout=2.0)
         assert received_messages == [b"test message 1", b"test message 2"]
 
     @pytest.mark.timeout(2)
-    def test_concurrent_publishing(self, transport):
+    def test_concurrent_publishing(self, journal):
         """Verify that multiple threads can publish messages concurrently."""
         received_messages = []
 
         def publisher(start_num: int, count: int):
             for i in range(count):
                 message = f"message_{start_num + i}".encode()
-                transport.publish(message)
+                journal.publish(message)
 
         def subscriber():
-            for message in transport.subscribe():
+            for message in journal.subscribe():
                 received_messages.append(message)
 
         subscriber_thread = threading.Thread(target=subscriber)
@@ -126,16 +126,16 @@ class BaseTransportTest:
         expected_total = num_threads * messages_per_thread
         assert len(received_messages) == expected_total
 
-        transport.shutdown()
+        journal.shutdown()
         subscriber_thread.join(timeout=1.0)
 
-    def test_concurrent_shutdown_is_thread_safe(self, transport):
+    def test_concurrent_shutdown_is_thread_safe(self, journal):
         """Verify that concurrent shutdown calls are thread-safe."""
         results = []
 
         def shutdown_and_record():
             start_time = time.time()
-            transport.shutdown()
+            journal.shutdown()
             end_time = time.time()
             results.append(end_time - start_time)
 

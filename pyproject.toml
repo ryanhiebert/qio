@@ -33,7 +33,7 @@ force-single-line = true
 [tool.qio]
 register = ["qio.sample"]
 broker = "pika://localhost:5672"
-transport = "pika://localhost:5672"
+journal = "pika://localhost:5672"
 
 [build-system]
 requires = ["hatchling"]

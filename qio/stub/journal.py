@@ -1,13 +1,13 @@
 import threading
 from collections.abc import Iterator
 
+from qio.journal import Journal
 from qio.queue import Queue
 from qio.queue import ShutDown
-from qio.transport import Transport
 
 
-class StubTransport(Transport):
-    """An in-memory transport implementation for testing."""
+class StubJournal(Journal):
+    """An in-memory journal implementation for testing."""
 
     def __init__(self):
         self.__queue = Queue[bytes]()

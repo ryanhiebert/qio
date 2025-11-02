@@ -2,23 +2,24 @@ import os
 
 import pytest
 
+from qio.stub.journal import StubJournal
+
 from .qio import Qio
 from .registry import ROUTINE_REGISTRY
 from .stub.broker import StubBroker
-from .stub.transport import StubTransport
 
 
-def test_qio_with_custom_broker_and_transport():
-    """Qio custom broker and transport implementations."""
+def test_qio_with_custom_broker_and_journal():
+    """Qio custom broker and journal implementations."""
     broker = StubBroker()
-    transport = StubTransport()
-    qio = Qio(broker=broker, transport=transport)
+    journal = StubJournal()
+    qio = Qio(broker=broker, journal=journal)
 
     try:
         # Test purge (uses broker)
         qio.purge(queue="qio")
 
-        # Test subscriptions (uses transport)
+        # Test subscriptions (uses journal)
         events = qio.subscribe({object})
         qio.unsubscribe(events)
 
@@ -30,12 +31,12 @@ def test_different_qio_instances_are_independent():
     """Qio instances are independent."""
     # Create two Qio instances with different stub implementations
     broker1 = StubBroker()
-    transport1 = StubTransport()
-    qio1 = Qio(broker=broker1, transport=transport1)
+    journal1 = StubJournal()
+    qio1 = Qio(broker=broker1, journal=journal1)
 
     broker2 = StubBroker()
-    transport2 = StubTransport()
-    qio2 = Qio(broker=broker2, transport=transport2)
+    journal2 = StubJournal()
+    qio2 = Qio(broker=broker2, journal=journal2)
 
     try:
         # Both should work independently
@@ -55,7 +56,7 @@ def test_different_qio_instances_are_independent():
 
 
 def test_qio_loads_configuration_from_pyproject(tmp_path):
-    """Qio loads broker and transport configuration from pyproject.toml."""
+    """Qio loads broker and journal configuration from pyproject.toml."""
 
     # Create config with default settings
     config_dir = tmp_path / "default_config"
@@ -68,7 +69,7 @@ def test_qio_loads_configuration_from_pyproject(tmp_path):
 
         [tool.qio]
         broker = "pika://localhost:5672"
-        transport = "pika://localhost:5672"
+        journal = "pika://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -96,10 +97,10 @@ def test_qio_loads_configuration_from_pyproject(tmp_path):
         ROUTINE_REGISTRY.update(original_registry)
 
 
-def test_qio_allows_independent_broker_transport_override(tmp_path):
-    """Qio allows independent override of broker or transport."""
+def test_qio_allows_independent_broker_journal_override(tmp_path):
+    """Qio allows independent override of broker or journal."""
 
-    # Create config for default broker/transport
+    # Create config for default broker/journal
     config_dir = tmp_path / "override_test"
     config_dir.mkdir()
     config_file = config_dir / "pyproject.toml"
@@ -110,7 +111,7 @@ def test_qio_allows_independent_broker_transport_override(tmp_path):
 
         [tool.qio]
         broker = "pika://localhost:5672"
-        transport = "pika://localhost:5672"
+        journal = "pika://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -124,13 +125,13 @@ def test_qio_allows_independent_broker_transport_override(tmp_path):
 
     try:
         stub_broker = StubBroker()
-        stub_transport = StubTransport()
+        stub_journal = StubJournal()
 
-        # Override just broker, transport should use default
+        # Override just broker, journal should use default
         qio1 = Qio(broker=stub_broker)
 
-        # Override just transport, broker should use default
-        qio2 = Qio(transport=stub_transport)
+        # Override just journal, broker should use default
+        qio2 = Qio(journal=stub_journal)
 
         try:
             # Both should work
@@ -162,7 +163,7 @@ def test_qio_routines_method():
         test_routine = Routine(test_function, name="test_routine", queue="test_queue")
         ROUTINE_REGISTRY["test_routine"] = test_routine
 
-        qio = Qio(broker=StubBroker(), transport=StubTransport())
+        qio = Qio(broker=StubBroker(), journal=StubJournal())
 
         try:
             routines = qio.routines()
@@ -194,7 +195,7 @@ def test_qio_with_valid_config(tmp_path):
         [tool.qio]
         register = ["qio.sample"]
         broker = "pika://localhost:5672"
-        transport = "pika://localhost:5672"
+        journal = "pika://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -217,9 +218,9 @@ def test_qio_with_valid_config(tmp_path):
 
 
 def test_qio_with_invalid_config(tmp_path):
-    """Qio fails with unknown broker/transport types."""
+    """Qio fails with unknown broker/journal types."""
 
-    # Create config with unknown broker/transport
+    # Create config with unknown broker/journal
     config_dir = tmp_path / "invalid_config"
     config_dir.mkdir()
     config_file = config_dir / "pyproject.toml"
@@ -230,7 +231,7 @@ def test_qio_with_invalid_config(tmp_path):
 
         [tool.qio]
         broker = "unknown://localhost:5672"
-        transport = "pika://localhost:5672"
+        journal = "pika://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -256,21 +257,21 @@ def test_qio_with_invalid_config(tmp_path):
         ROUTINE_REGISTRY.update(original_registry)
 
 
-def test_qio_with_invalid_transport_config(tmp_path):
-    """Qio fails with unknown transport type."""
+def test_qio_with_invalid_journal_config(tmp_path):
+    """Qio fails with unknown journal type."""
 
-    # Create config with unknown transport
-    config_dir = tmp_path / "invalid_transport_config"
+    # Create config with unknown journal
+    config_dir = tmp_path / "invalid_journal_config"
     config_dir.mkdir()
     config_file = config_dir / "pyproject.toml"
     config_content = """
         [project]
-        name = "test-project-invalid-transport"
+        name = "test-project-invalid-journal"
         version = "0.1.0"
 
         [tool.qio]
         broker = "pika://localhost:5672"
-        transport = "unknown://localhost:5672"
+        journal = "unknown://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -283,7 +284,7 @@ def test_qio_with_invalid_transport_config(tmp_path):
     ROUTINE_REGISTRY.clear()
 
     try:
-        # Should raise ValueError for unknown transport URI scheme
+        # Should raise ValueError for unknown journal URI scheme
         with pytest.raises(
             ValueError,
             match="URI scheme must be 'pika:', got: unknown://localhost:5672",
@@ -310,7 +311,7 @@ def test_qio_with_uri_broker_config(tmp_path):
 
         [tool.qio]
         broker = "pika://localhost:5672"
-        transport = "pika://localhost:5672"
+        journal = "pika://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -336,21 +337,21 @@ def test_qio_with_uri_broker_config(tmp_path):
         ROUTINE_REGISTRY.update(original_registry)
 
 
-def test_qio_with_uri_transport_config(tmp_path):
-    """Qio works with URI-based transport configuration."""
+def test_qio_with_uri_journal_config(tmp_path):
+    """Qio works with URI-based journal configuration."""
 
-    # Create config with transport URI
-    config_dir = tmp_path / "uri_transport_config"
+    # Create config with journal URI
+    config_dir = tmp_path / "uri_journal_config"
     config_dir.mkdir()
     config_file = config_dir / "pyproject.toml"
     config_content = """
         [project]
-        name = "test-project-uri-transport"
+        name = "test-project-uri-journal"
         version = "0.1.0"
 
         [tool.qio]
         broker = "pika://localhost:5672"
-        transport = "pika://localhost:5672"
+        journal = "pika://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -377,7 +378,7 @@ def test_qio_with_uri_transport_config(tmp_path):
 
 
 def test_qio_with_both_uri_configs(tmp_path):
-    """Qio works with both broker and transport as URIs."""
+    """Qio works with both broker and journal as URIs."""
 
     # Create config with both URIs
     config_dir = tmp_path / "both_uri_config"
@@ -390,7 +391,7 @@ def test_qio_with_both_uri_configs(tmp_path):
 
         [tool.qio]
         broker = "pika://localhost:5672"
-        transport = "pika://localhost:5672"
+        journal = "pika://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -430,7 +431,7 @@ def test_qio_with_invalid_broker_uri_scheme(tmp_path):
 
         [tool.qio]
         broker = "redis://localhost:6379"
-        transport = "pika://localhost:5672"
+        journal = "pika://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -458,7 +459,7 @@ def test_qio_with_invalid_broker_uri_scheme(tmp_path):
 def test_qio_with_both_environment_variables(tmp_path, monkeypatch):
     """Qio prefers both environment variables over config."""
 
-    # Create config with different broker/transport
+    # Create config with different broker/journal
     config_dir = tmp_path / "env_both_test"
     config_dir.mkdir()
     config_file = config_dir / "pyproject.toml"
@@ -469,7 +470,7 @@ def test_qio_with_both_environment_variables(tmp_path, monkeypatch):
 
         [tool.qio]
         broker = "pika://config:5672"
-        transport = "pika://config:5672"
+        journal = "pika://config:5672"
         """
     config_file.write_text(config_content)
 
@@ -483,7 +484,7 @@ def test_qio_with_both_environment_variables(tmp_path, monkeypatch):
 
     # Set both environment variables to use localhost (which works)
     monkeypatch.setenv("QIO_BROKER", "pika://localhost:5672")
-    monkeypatch.setenv("QIO_TRANSPORT", "pika://localhost:5672")
+    monkeypatch.setenv("QIO_JOURNAL", "pika://localhost:5672")
 
     try:
         qio = Qio()
@@ -520,10 +521,10 @@ def test_qio_with_invalid_environment_broker(monkeypatch):
         ROUTINE_REGISTRY.update(original_registry)
 
 
-def test_qio_with_invalid_environment_transport(monkeypatch):
-    """Qio fails with invalid QIO_TRANSPORT environment variable."""
+def test_qio_with_invalid_environment_journal(monkeypatch):
+    """Qio fails with invalid QIO_JOURNAL environment variable."""
     # Set invalid environment variable
-    monkeypatch.setenv("QIO_TRANSPORT", "redis://invalid:6379")
+    monkeypatch.setenv("QIO_JOURNAL", "redis://invalid:6379")
 
     # Clear registry to isolate test
     original_registry = dict(ROUTINE_REGISTRY)
@@ -541,21 +542,21 @@ def test_qio_with_invalid_environment_transport(monkeypatch):
         ROUTINE_REGISTRY.update(original_registry)
 
 
-def test_qio_with_invalid_transport_uri_scheme(tmp_path):
-    """Qio fails with invalid URI scheme for transport."""
+def test_qio_with_invalid_journal_uri_scheme(tmp_path):
+    """Qio fails with invalid URI scheme for journal."""
 
-    # Create config with invalid transport URI scheme
-    config_dir = tmp_path / "invalid_transport_uri"
+    # Create config with invalid journal URI scheme
+    config_dir = tmp_path / "invalid_journal_uri"
     config_dir.mkdir()
     config_file = config_dir / "pyproject.toml"
     config_content = """
         [project]
-        name = "test-project-invalid-transport-uri"
+        name = "test-project-invalid-journal-uri"
         version = "0.1.0"
 
         [tool.qio]
         broker = "pika://localhost:5672"
-        transport = "redis://localhost:6379"
+        journal = "redis://localhost:6379"
         """
     config_file.write_text(config_content)
 

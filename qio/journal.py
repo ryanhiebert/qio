@@ -3,11 +3,11 @@ from abc import abstractmethod
 from collections.abc import Iterator
 
 
-class Transport(ABC):
+class Journal(ABC):
     @classmethod
     @abstractmethod
     def from_uri(cls, uri: str, /):
-        """Create a transport instance from a URI."""
+        """Create a journal instance from a URI."""
         raise NotImplementedError("Subclasses must implement this method.")
 
     @abstractmethod

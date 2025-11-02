@@ -167,9 +167,8 @@ class Worker:
     def __runner(self):
         """Run tasks from the queue.
 
-        This actor pulls tasks from the queue and runs them, generating
-        the appropriate events on the bus to notify other actors of the
-        results.
+        This actor pulls tasks from the queue and runs them, writing the
+        appropriate events to the stream to notify other actors of the results.
         """
         while True:
             try:

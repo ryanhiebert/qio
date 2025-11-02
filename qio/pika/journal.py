@@ -7,16 +7,16 @@ from pika import BlockingConnection
 from pika import ConnectionParameters
 from pika import URLParameters
 
-from qio.transport import Transport
+from qio.journal import Journal
 
 from ..queue import Queue
 from ..queue import ShutDown
 
 
-class PikaTransport(Transport):
+class PikaJournal(Journal):
     @classmethod
     def from_uri(cls, uri: str, /):
-        """Create a transport instance from a URI."""
+        """Create a journal instance from a URI."""
         amqp_uri = "amqp:" + uri.removeprefix("pika:")
         return cls(URLParameters(amqp_uri))
 
@@ -34,7 +34,7 @@ class PikaTransport(Transport):
             self.__queue_name, "amq.topic", routing_key="#"
         )
         self.__subscribe_thread = Thread(
-            target=self.__listen, name="qio-bus-transport-listener"
+            target=self.__listen, name="qio-journal-listener"
         )
         self.__subscribe_thread.start()
 

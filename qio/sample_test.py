@@ -7,7 +7,7 @@ from pika import ConnectionParameters
 from qio import Qio
 from qio.invocation import InvocationSucceeded
 from qio.pika.broker import PikaBroker
-from qio.pika.transport import PikaTransport
+from qio.pika.journal import PikaJournal
 from qio.sample import irregular
 
 
@@ -17,7 +17,7 @@ def test_integration():
     connection_params = ConnectionParameters()
     qio = Qio(
         broker=PikaBroker(connection_params),
-        transport=PikaTransport(connection_params),
+        journal=PikaJournal(connection_params),
     )
 
     try:

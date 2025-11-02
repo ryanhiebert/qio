@@ -13,7 +13,7 @@ from qio.worker import Worker
 queuespec = QueueSpec.parse("production=5")
 
 # Create worker
-qio = Qio(broker=broker, transport=transport)
+qio = Qio(broker=broker, journal=journal)
 worker = Worker(qio, queuespec)
 
 # Run worker (blocks until stopped)

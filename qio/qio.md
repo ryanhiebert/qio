@@ -1,6 +1,6 @@
 # Qio Class Configuration
 
-The `Qio` class requires configuration of broker and transport connections through environment variables or config file settings. Environment variables always take precedence over config file settings.
+The `Qio` class requires configuration of broker and journal connections through environment variables or config file settings. Environment variables always take precedence over config file settings.
 
 ## Priority Order
 
@@ -12,7 +12,7 @@ The `Qio` class requires configuration of broker and transport connections throu
 Set these environment variables to configure the `Qio` class:
 
 - `QIO_BROKER` - Broker connection URI
-- `QIO_TRANSPORT` - Transport connection URI
+- `QIO_JOURNAL` - Journal connection URI
 
 ## Configuration File
 
@@ -21,7 +21,7 @@ Add configuration to your `pyproject.toml`:
 ```toml
 [tool.qio]
 broker = "pika://localhost:5672"
-transport = "pika://localhost:5672"
+journal = "pika://localhost:5672"
 ```
 
 ## URI Format
