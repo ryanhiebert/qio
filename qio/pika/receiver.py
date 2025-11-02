@@ -1,7 +1,5 @@
-from collections.abc import Callable
 from collections.abc import Iterator
 from threading import Lock
-from typing import Any
 from typing import cast
 
 from pika import BlockingConnection
@@ -23,7 +21,9 @@ class PikaReceiver(Receiver):
         self.__connection = BlockingConnection(connection_params)
         self.__channel = self.__connection.channel()
         self.__channel.queue_declare(queue=queue, durable=True)
-        self.__channel.basic_qos(prefetch_count=prefetch)
+        self.__prefetch_lock = Lock()
+        self.__prefetch = prefetch
+        self.__channel.basic_qos(prefetch_count=prefetch, global_qos=True)
         self.__iterator = self.__channel.consume(queue=queue)
         self.__tag = dict[Message, int]()
         self.__suspended = set[Message]()
@@ -41,13 +41,12 @@ class PikaReceiver(Receiver):
         The message processing is not completed, and is expected to unpause,
         but its assigned capacity may be allocated elsewhere temporarily.
         """
-        if message in self.__suspended:
-            # Already acked previously
-            return
-
-        # Can't change prefetch window dynamically on the consumer
-        self.__suspended.add(message)
-        self.__blocking_callback(lambda: self.__ack(delivery_tag=self.__tag[message]))
+        with self.__prefetch_lock:
+            self.__prefetch += 1
+            prefetch = self.__prefetch  # Memo for the lambda
+            self.__connection.add_callback_threadsafe(
+                lambda: self.__channel.basic_qos(prefetch_count=prefetch)
+            )
 
     def unpause(self, message: Message, /):
         """Unpause processing of a message.
@@ -55,7 +54,12 @@ class PikaReceiver(Receiver):
         The previously paused message processing is resuming, so its assigned
         capacity is no longer available for allocation elsewhere.
         """
-        pass  # Message has already been acked, do nothing.
+        with self.__prefetch_lock:
+            self.__prefetch -= 1
+            prefetch = self.__prefetch  # Memo for the lambda
+            self.__connection.add_callback_threadsafe(
+                lambda: self.__channel.basic_qos(prefetch_count=prefetch)
+            )
 
     def finish(self, message: Message, /):
         """Finish processing a message.
@@ -63,33 +67,12 @@ class PikaReceiver(Receiver):
         The message is done processing, and its assigned capacity may be
         allocated elsewhere permanently.
         """
-        if message in self.__suspended:
-            self.__suspended.remove(message)
-            return  # Message has already been acked, do nothing.
-        self.__blocking_callback(
-            lambda: self.__ack(delivery_tag=self.__tag.pop(message))
+        self.__connection.add_callback_threadsafe(
+            lambda: self.__channel.basic_ack(delivery_tag=self.__tag.pop(message))
         )
 
     def shutdown(self):
-        self.__blocking_callback(lambda: self.__shutdown())
-
-    def __blocking_callback(self, fn: Callable[[], Any]):
-        """Queue a callback and block until it is executed."""
-        lock = Lock()
-        lock.acquire()
-
-        def callback():
-            try:
-                fn()
-            finally:
-                lock.release()
-
-        self.__connection.add_callback_threadsafe(callback)
-        with lock:
-            return
-
-    def __ack(self, *, delivery_tag: int):
-        self.__channel.basic_ack(delivery_tag=delivery_tag)
+        self.__connection.add_callback_threadsafe(self.__shutdown)
 
     def __shutdown(self):
         self.__channel.cancel()

@@ -2,23 +2,16 @@ import subprocess
 import sys
 
 import pytest
-from pika import ConnectionParameters
 
 from qio import Qio
 from qio.invocation import InvocationSucceeded
-from qio.pika.broker import PikaBroker
-from qio.pika.journal import PikaJournal
 from qio.sample import irregular
 
 
 @pytest.mark.timeout(10)
 def test_integration():
     # Prefers a clean environment and queue
-    connection_params = ConnectionParameters()
-    qio = Qio(
-        broker=PikaBroker(connection_params),
-        journal=PikaJournal(connection_params),
-    )
+    qio = Qio()
 
     try:
         qio.purge(queue="qio")
