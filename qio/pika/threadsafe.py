@@ -140,6 +140,7 @@ class ThreadsafeChannel:
         arguments: Mapping[str, Any] | None = None,
     ) -> frame.Method[spec.Basic.ConsumeOk]:
         future: Future[frame.Method[spec.Basic.ConsumeOk]] = Future()
+
         self.__wait(
             lambda: self.__channel.basic_consume(
                 queue=queue,

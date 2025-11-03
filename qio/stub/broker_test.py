@@ -7,6 +7,7 @@ from .broker import StubBroker
 
 class TestStubBroker(BaseBrokerTest):
     supports_multiple_queues = True
+    supports_weighted_queue_subscriptions = True
 
     @pytest.fixture
     def broker(self):

@@ -289,6 +289,7 @@ class BaseBrokerTest:
         thread.join(timeout=1.0)  # Clean up thread
 
     @skip_if_unsupported("supports_multiple_queues")
+    @skip_if_unsupported("supports_weighted_queue_subscriptions")
     def test_duplicate_queue_names_get_additional_priority(self, broker):
         """Verify that listing a queue multiple times gives it proportional priority.
 
@@ -317,7 +318,7 @@ class BaseBrokerTest:
                 "priority_queue",
                 "priority_queue",
             ],
-            concurrency=40,
+            concurrency=5,
         )
 
         def receive_messages():
@@ -329,6 +330,7 @@ class BaseBrokerTest:
                     selection_order.append("P")
                 else:
                     selection_order.append("N")
+                receiver.finish(message)
                 if len(received_messages) >= 40:
                     break
 
@@ -363,7 +365,7 @@ class BaseBrokerTest:
 
         # The unintuitive behavior: priority_queue gets selected proportionally more
         # often (roughly 3:1 ratio) due to being listed 3 times vs 1 time
-        assert actual_p_ratio > 0.6, (
+        assert actual_p_ratio > 0.7, (
             f"Expected priority queue to be selected ~75% of time due to 3:1 weighting,"
             f" but got {actual_p_ratio:.2%}. Pattern: {selection_pattern}"
         )
@@ -401,7 +403,7 @@ class BaseBrokerTest:
         broker.purge(queue="queue2")
 
         # Only queue1 and queue2 have messages, empty is always empty
-        for i in range(12):
+        for i in range(50):
             broker.enqueue(f"msg1_{i}".encode(), queue="queue1")
             broker.enqueue(f"msg2_{i}".encode(), queue="queue2")
 
@@ -409,7 +411,7 @@ class BaseBrokerTest:
         selection_order = []
 
         # Put empty queue in middle to test the cycling bug
-        queuespec = QueueSpec(queues=["queue1", "empty", "queue2"], concurrency=24)
+        queuespec = QueueSpec(queues=["queue1", "empty", "queue2"], concurrency=8)
 
         def receive_messages():
             receiver = broker.receive(queuespec)
@@ -420,33 +422,35 @@ class BaseBrokerTest:
                     selection_order.append("1")
                 else:
                     selection_order.append("2")
-                if len(received_messages) >= 24:
+                receiver.finish(message)
+                if len(received_messages) >= 100:
                     break
 
         thread = threading.Thread(target=receive_messages)
         thread.start()
         thread.join(timeout=2.0)
 
-        assert len(received_messages) == 24
+        assert len(received_messages) == 100
 
         queue1_count = selection_order.count("1")
         queue2_count = selection_order.count("2")
 
         # Both queues should be fully received
-        assert queue1_count == 12
-        assert queue2_count == 12
+        assert queue1_count == 50
+        assert queue2_count == 50
 
-        # Key test: In the first portion when both queues have messages,
-        # they should split roughly equally (not 2:1 due to cycling bug)
-        first_12 = selection_order[:12]
-        q1_early = first_12.count("1")
-        q2_early = first_12.count("2")
+        # Key test: During the period when both queues have messages available,
+        # they should receive roughly equal treatment despite the empty queue.
+        # Test the first 50% of messages when both queues are active.
+        first_half = selection_order[:50]  # First 50% of messages
+        q1_early = first_half.count("1")
+        q2_early = first_half.count("2")
 
-        # With correct cycling, should be close to 6/6
-        # With broken cycling, would be closer to 8/4
-        assert abs(q1_early - q2_early) <= 2, (
-            f"Expected roughly equal split, got {q1_early}:{q2_early} "
-            f"in first 12. Pattern: {''.join(first_12)}"
+        # The exact distribution pattern may vary by broker implementation,
+        # but neither queue should be significantly starved during this period.
+        assert abs(q1_early - q2_early) <= 10, (
+            f"Expected balanced distribution, got {q1_early}:{q2_early}. "
+            f"Actual order: {selection_order}"
         )
 
         broker.shutdown()

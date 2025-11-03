@@ -18,18 +18,22 @@ class PikaReceiver(Receiver):
     ):
         if len(queuespec.queues) == 0:
             raise ValueError("Must specify at least one queue")
-        if len(queuespec.queues) != 1:
-            raise ValueError("Only one queue is supported")
 
         self.__channel = connection.channel()
         self.__consumer_tag = dict[str, str]()
         self.__tag = dict[Message, int]()
 
-        self.__channel.declare_queue(queue=queuespec.queues[0], durable=True)
         self.__prefetch_lock = Lock()
         self.__prefetch = 0
         self.__adjust_prefetch(+queuespec.concurrency)
-        self.__channel.consume(queuespec.queues[0])
+
+        declared_queues = set()
+        for queue in queuespec.queues:
+            if queue not in declared_queues:
+                self.__channel.declare_queue(queue=queue, durable=True)
+                declared_queues.add(queue)
+            result = self.__channel.consume(queue)
+            self.__consumer_tag[queue] = cast(str, result.method.consumer_tag)
 
     def __adjust_prefetch(self, change: int) -> None:
         with self.__prefetch_lock:
@@ -68,5 +72,5 @@ class PikaReceiver(Receiver):
         self.__channel.ack(delivery_tag=self.__tag.pop(message))
 
     def shutdown(self):
-        for consumer_tag in list(self.__consumer_tag.values()):
+        for consumer_tag in self.__consumer_tag.values():
             self.__channel.cancel(consumer_tag=consumer_tag)
