@@ -2,34 +2,42 @@ from collections.abc import Iterator
 from threading import Lock
 from typing import cast
 
-from pika import BlockingConnection
-from pika import ConnectionParameters
-from pika import URLParameters
-
 from qio.message import Message
+from qio.queuespec import QueueSpec
 from qio.receiver import Receiver
+
+from .threadsafe import ThreadsafeConnection
 
 
 class PikaReceiver(Receiver):
     def __init__(
         self,
-        *,
-        connection_params: ConnectionParameters | URLParameters,
-        queue: str,
-        prefetch: int,
+        connection: ThreadsafeConnection,
+        queuespec: QueueSpec,
+        /,
     ):
-        self.__connection = BlockingConnection(connection_params)
-        self.__channel = self.__connection.channel()
-        self.__channel.queue_declare(queue=queue, durable=True)
-        self.__prefetch_lock = Lock()
-        self.__prefetch = prefetch
-        self.__channel.basic_qos(prefetch_count=prefetch, global_qos=True)
-        self.__iterator = self.__channel.consume(queue=queue)
+        if len(queuespec.queues) == 0:
+            raise ValueError("Must specify at least one queue")
+        if len(queuespec.queues) != 1:
+            raise ValueError("Only one queue is supported")
+
+        self.__channel = connection.channel()
+        self.__consumer_tag = dict[str, str]()
         self.__tag = dict[Message, int]()
-        self.__suspended = set[Message]()
+
+        self.__channel.declare_queue(queue=queuespec.queues[0], durable=True)
+        self.__prefetch_lock = Lock()
+        self.__prefetch = 0
+        self.__adjust_prefetch(+queuespec.concurrency)
+        self.__channel.consume(queuespec.queues[0])
+
+    def __adjust_prefetch(self, change: int) -> None:
+        with self.__prefetch_lock:
+            self.__prefetch += change
+            self.__channel.qos(prefetch_count=self.__prefetch, global_qos=True)
 
     def __iter__(self) -> Iterator[Message]:
-        for method, _, body in self.__iterator:
+        for method, _, body in self.__channel.messages():
             message = Message(body)
             tag = cast(int, method.delivery_tag)
             self.__tag[message] = tag
@@ -41,12 +49,7 @@ class PikaReceiver(Receiver):
         The message processing is not completed, and is expected to unpause,
         but its assigned capacity may be allocated elsewhere temporarily.
         """
-        with self.__prefetch_lock:
-            self.__prefetch += 1
-            prefetch = self.__prefetch  # Memo for the lambda
-            self.__connection.add_callback_threadsafe(
-                lambda: self.__channel.basic_qos(prefetch_count=prefetch)
-            )
+        self.__adjust_prefetch(+1)
 
     def unpause(self, message: Message, /):
         """Unpause processing of a message.
@@ -54,12 +57,7 @@ class PikaReceiver(Receiver):
         The previously paused message processing is resuming, so its assigned
         capacity is no longer available for allocation elsewhere.
         """
-        with self.__prefetch_lock:
-            self.__prefetch -= 1
-            prefetch = self.__prefetch  # Memo for the lambda
-            self.__connection.add_callback_threadsafe(
-                lambda: self.__channel.basic_qos(prefetch_count=prefetch)
-            )
+        self.__adjust_prefetch(-1)
 
     def finish(self, message: Message, /):
         """Finish processing a message.
@@ -67,13 +65,8 @@ class PikaReceiver(Receiver):
         The message is done processing, and its assigned capacity may be
         allocated elsewhere permanently.
         """
-        self.__connection.add_callback_threadsafe(
-            lambda: self.__channel.basic_ack(delivery_tag=self.__tag.pop(message))
-        )
+        self.__channel.ack(delivery_tag=self.__tag.pop(message))
 
     def shutdown(self):
-        self.__connection.add_callback_threadsafe(self.__shutdown)
-
-    def __shutdown(self):
-        self.__channel.cancel()
-        self.__connection.close()
+        for consumer_tag in list(self.__consumer_tag.values()):
+            self.__channel.cancel(consumer_tag=consumer_tag)

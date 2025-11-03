@@ -74,13 +74,12 @@ class BaseBrokerTest:
             receiver = broker.receive(queuespec)
             for message in receiver:
                 received_messages.append(message)
-                # Don't call start() - this should block after prefetch_limit messages
 
         thread = threading.Thread(target=receive_messages)
         thread.start()
 
         # Wait for receiver to reach prefetch limit or timeout
-        thread.join(timeout=1.0)
+        thread.join(timeout=0.1)
 
         # Should have received exactly prefetch_limit messages and be blocked
         assert len(received_messages) == prefetch_limit
@@ -88,6 +87,7 @@ class BaseBrokerTest:
 
         broker.shutdown()
         thread.join(timeout=1.0)  # Clean up thread
+        assert not thread.is_alive()
 
     @pytest.mark.timeout(2)
     def test_suspend_resume_affects_prefetch_capacity(self, broker):

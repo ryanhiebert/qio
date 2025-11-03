@@ -151,6 +151,8 @@ def test_qio_routines_method():
     """Qio.routines() returns registered routines."""
     from .routine import Routine
 
+    qio = Qio(broker=StubBroker(), journal=StubJournal())
+
     # Clear registry to isolate test
     original_registry = dict(ROUTINE_REGISTRY)
     ROUTINE_REGISTRY.clear()
@@ -162,8 +164,6 @@ def test_qio_routines_method():
 
         test_routine = Routine(test_function, name="test_routine", queue="test_queue")
         ROUTINE_REGISTRY["test_routine"] = test_routine
-
-        qio = Qio(broker=StubBroker(), journal=StubJournal())
 
         try:
             routines = qio.routines()
