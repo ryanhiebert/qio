@@ -411,7 +411,7 @@ class BaseBrokerTest:
         selection_order = []
 
         # Put empty queue in middle to test the cycling bug
-        queuespec = QueueSpec(queues=["queue1", "empty", "queue2"], concurrency=8)
+        queuespec = QueueSpec(queues=["queue1", "empty", "queue2"], concurrency=3)
 
         def receive_messages():
             receiver = broker.receive(queuespec)
@@ -450,7 +450,7 @@ class BaseBrokerTest:
         # but neither queue should be significantly starved during this period.
         assert abs(q1_early - q2_early) <= 10, (
             f"Expected balanced distribution, got {q1_early}:{q2_early}. "
-            f"Actual order: {selection_order}"
+            f"Actual order: {''.join(first_half)}"
         )
 
         broker.shutdown()
