@@ -12,12 +12,11 @@ from typing import Any
 from typing import Self
 
 from .id import random_id
-from .suspendable import Suspendable
 from .suspension import Suspension
 
 
 @dataclass(eq=False, kw_only=True)
-class Invocation[R](Suspendable[R]):
+class Invocation[R](Suspension[R]):
     id: str = field(default_factory=random_id)
     routine: str
     args: tuple[Any, ...]

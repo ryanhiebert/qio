@@ -4,16 +4,15 @@ from concurrent.futures import Future
 from functools import partial
 from typing import Any
 
-from .suspendable import Suspendable
 from .suspension import Suspension
 from .thread import Thread
 
 
 class CancelledError(BaseException):
-    """A running suspendable has been cancelled."""
+    """A running suspension has been cancelled."""
 
 
-class Suspend[R](Suspendable[R]):
+class Suspend[R](Suspension[R]):
     def __init__(self, awaitable: Awaitable[R]):
         self.__awaitable = awaitable
         self.__thread = Thread(target=self.__run)

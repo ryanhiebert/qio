@@ -5,10 +5,10 @@ from typing import Any
 from typing import overload
 
 from .suspend import suspend
-from .suspendable import Suspendable
+from .suspension import Suspension
 
 
-class Gather[T](Suspendable[T]):
+class Gather[T](Suspension[T]):
     def __init__(self, awaitables: Iterable[Awaitable[Any]]):
         super().__init__()
         self.__awaitables = awaitables
