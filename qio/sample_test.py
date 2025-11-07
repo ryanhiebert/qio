@@ -27,7 +27,7 @@ def test_integration():
         )
         try:
             while event := events.get():
-                if event.invocation_id == invocation.id:
+                if event.id == invocation.id:
                     break
         finally:
             if worker.poll() is None:  # Process is still running

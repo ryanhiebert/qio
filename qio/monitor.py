@@ -63,51 +63,51 @@ class Monitor(App):
         match event:
             case InvocationSubmitted():
                 table.add_row(
-                    event.invocation_id,
+                    event.id,
                     event.routine,
                     "Submitted",
                     self.__qio.routine(event.routine).queue,
-                    key=event.invocation_id,
+                    key=event.id,
                 )
             case InvocationStarted():
                 table.update_cell(
-                    event.invocation_id,
+                    event.id,
                     self.__column_keys[2],
                     "Started",
                 )
             case InvocationSuspended():
                 table.update_cell(
-                    event.invocation_id,
+                    event.id,
                     self.__column_keys[2],
                     "Suspended",
                 )
             case InvocationContinued():
                 table.update_cell(
-                    event.invocation_id,
+                    event.id,
                     self.__column_keys[2],
                     "Continued",
                 )
             case InvocationThrew():
                 table.update_cell(
-                    event.invocation_id,
+                    event.id,
                     self.__column_keys[2],
                     "Threw",
                 )
             case InvocationResumed():
                 table.update_cell(
-                    event.invocation_id,
+                    event.id,
                     self.__column_keys[2],
                     "Resumed",
                 )
             case InvocationSucceeded():
                 table.update_cell(
-                    event.invocation_id,
+                    event.id,
                     self.__column_keys[2],
                     "Succeeded",
                 )
             case InvocationErrored():
                 table.update_cell(
-                    event.invocation_id,
+                    event.id,
                     self.__column_keys[2],
                     "Errored",
                 )

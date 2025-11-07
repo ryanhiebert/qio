@@ -74,12 +74,12 @@ def deserialize(serialized: bytes, /) -> Invocation:
 
 @dataclass(eq=False, kw_only=True)
 class InvocationEvent:
-    id: str = field(default_factory=random_id)
+    event_id: str = field(default_factory=random_id)
     timestamp: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
-    invocation_id: str
+    id: str
 
     def __repr__(self):
-        return f"<{type(self).__name__} {self.invocation_id}>"
+        return f"<{type(self).__name__} {self.id}>"
 
 
 @dataclass(eq=False, kw_only=True, repr=False)
@@ -92,10 +92,7 @@ class InvocationSubmitted(InvocationEvent):
         params_repr = ", ".join(
             (*map(repr, self.args), *(f"{k}={v!r}" for k, v in self.kwargs.items())),
         )
-        return (
-            f"<{type(self).__name__} {self.invocation_id} "
-            f"{self.routine}({params_repr})>"
-        )
+        return f"<{type(self).__name__} {self.id} {self.routine}({params_repr})>"
 
 
 @dataclass(eq=False, kw_only=True, repr=False)
@@ -117,10 +114,7 @@ class LocalInvocationSuspended(BaseInvocationSuspended):
     invocation: Invocation
 
     def __repr__(self):
-        return (
-            f"<{type(self).__name__} {self.invocation_id}"
-            f" suspension={self.suspension!r}>"
-        )
+        return f"<{type(self).__name__} {self.id} suspension={self.suspension!r}>"
 
 
 @dataclass(eq=False, kw_only=True)
@@ -128,7 +122,7 @@ class BaseInvocationContinued(InvocationEvent):
     value: Any
 
     def __repr__(self):
-        return f"<{type(self).__name__} {self.invocation_id} value={self.value!r}>"
+        return f"<{type(self).__name__} {self.id} value={self.value!r}>"
 
 
 @dataclass(eq=False, kw_only=True, repr=False)
@@ -145,9 +139,7 @@ class BaseInvocationThrew(InvocationEvent):
     exception: Exception
 
     def __repr__(self):
-        return (
-            f"<{type(self).__name__} {self.invocation_id} exception={self.exception!r}>"
-        )
+        return f"<{type(self).__name__} {self.id} exception={self.exception!r}>"
 
 
 @dataclass(eq=False, kw_only=True, repr=False)
@@ -172,7 +164,7 @@ class InvocationSucceeded(InvocationCompleted):
     value: Any
 
     def __repr__(self):
-        return f"<{type(self).__name__} {self.invocation_id} value={self.value!r}>"
+        return f"<{type(self).__name__} {self.id} value={self.value!r}>"
 
 
 @dataclass(eq=False, kw_only=True)
@@ -180,6 +172,4 @@ class InvocationErrored(InvocationCompleted):
     exception: Exception
 
     def __repr__(self):
-        return (
-            f"<{type(self).__name__} {self.invocation_id} exception={self.exception!r}>"
-        )
+        return f"<{type(self).__name__} {self.id} exception={self.exception!r}>"

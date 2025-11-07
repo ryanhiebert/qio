@@ -129,13 +129,11 @@ class Qio:
                     break
 
                 match event:
-                    case InvocationSucceeded(invocation_id=invocation_id, value=value):
+                    case InvocationSucceeded(id=invocation_id, value=value):
                         if invocation_id in waiting:
                             future = waiting.pop(invocation_id)
                             future.set_result(value)
-                    case InvocationErrored(
-                        invocation_id=invocation_id, exception=exception
-                    ):
+                    case InvocationErrored(id=invocation_id, exception=exception):
                         if invocation_id in waiting:
                             future = waiting.pop(invocation_id)
                             future.set_exception(exception)
@@ -161,7 +159,7 @@ class Qio:
         routine = self.routine(invocation.routine)
         self.__stream.publish(
             InvocationSubmitted(
-                invocation_id=invocation.id,
+                id=invocation.id,
                 routine=invocation.routine,
                 args=invocation.args,
                 kwargs=invocation.kwargs,

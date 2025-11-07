@@ -42,7 +42,7 @@ class Consumer(Iterable[Invocation]):
 
     def start(self, invocation: Invocation):
         """Signal that the invocation is starting."""
-        self.__stream.publish(InvocationStarted(invocation_id=invocation.id))
+        self.__stream.publish(InvocationStarted(id=invocation.id))
 
     def suspend(
         self,
@@ -52,10 +52,10 @@ class Consumer(Iterable[Invocation]):
     ):
         """Signal that the invocation has suspended."""
         if suspension:
-            self.__stream.publish(InvocationSuspended(invocation_id=invocation.id))
+            self.__stream.publish(InvocationSuspended(id=invocation.id))
             self.__stream.publish_local(
                 LocalInvocationSuspended(
-                    invocation_id=invocation.id,
+                    id=invocation.id,
                     suspension=suspension,
                     invocation=invocation,
                     generator=generator,
@@ -65,42 +65,32 @@ class Consumer(Iterable[Invocation]):
 
     def resolve(self, invocation: Invocation, generator: Generator, value: Any):
         """Signal that a suspension has resolved to a value."""
-        self.__stream.publish(
-            InvocationContinued(invocation_id=invocation.id, value=value)
-        )
+        self.__stream.publish(InvocationContinued(id=invocation.id, value=value))
         self.__stream.publish_local(
-            LocalInvocationContinued(
-                invocation_id=invocation.id, generator=generator, value=value
-            )
+            LocalInvocationContinued(id=invocation.id, generator=generator, value=value)
         )
         self.__receiver.unpause(self.__invocations[invocation])
 
     def throw(self, invocation: Invocation, generator: Generator, exception: Exception):
         """Signal that a suspension has thrown an exception."""
-        self.__stream.publish(
-            InvocationThrew(invocation_id=invocation.id, exception=exception)
-        )
+        self.__stream.publish(InvocationThrew(id=invocation.id, exception=exception))
         self.__stream.publish_local(
             LocalInvocationThrew(
-                invocation_id=invocation.id, generator=generator, exception=exception
+                id=invocation.id, generator=generator, exception=exception
             )
         )
         self.__receiver.unpause(self.__invocations[invocation])
 
     def resume(self, invocation: Invocation):
         """Signal that the invocation is resuming."""
-        self.__stream.publish(InvocationResumed(invocation_id=invocation.id))
+        self.__stream.publish(InvocationResumed(id=invocation.id))
 
     def succeed(self, invocation: Invocation, value: Any):
         """Signal that the invocation has succeeded."""
-        self.__stream.publish(
-            InvocationSucceeded(invocation_id=invocation.id, value=value)
-        )
+        self.__stream.publish(InvocationSucceeded(id=invocation.id, value=value))
         self.__receiver.finish(self.__invocations.pop(invocation))
 
     def error(self, invocation: Invocation, exception: Exception):
         """Signal that the invocation has errored."""
-        self.__stream.publish(
-            InvocationErrored(invocation_id=invocation.id, exception=exception)
-        )
+        self.__stream.publish(InvocationErrored(id=invocation.id, exception=exception))
         self.__receiver.finish(self.__invocations.pop(invocation))
