@@ -6,11 +6,10 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from dataclasses import field
-from datetime import UTC
-from datetime import datetime
 from typing import Any
 from typing import Self
 
+from .event import Event
 from .id import random_id
 from .suspension import Suspension
 
@@ -73,9 +72,7 @@ def deserialize(serialized: bytes, /) -> Invocation:
 
 
 @dataclass(eq=False, kw_only=True)
-class InvocationEvent:
-    event_id: str = field(default_factory=random_id)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
+class InvocationEvent(Event):
     id: str
 
     def __repr__(self):
