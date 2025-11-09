@@ -13,9 +13,7 @@ from .event import Event
 from .id import random_id
 from .suspension import Suspension
 from .suspension import SuspensionCompleted
-from .suspension import SuspensionErrored
 from .suspension import SuspensionSubmitted
-from .suspension import SuspensionSucceeded
 
 
 @dataclass(eq=False, kw_only=True)
@@ -135,11 +133,3 @@ class InvocationResumed(Event): ...
 
 @dataclass(eq=False, kw_only=True)
 class InvocationCompleted(SuspensionCompleted): ...
-
-
-@dataclass(eq=False, kw_only=True)
-class InvocationSucceeded(SuspensionSucceeded): ...
-
-
-@dataclass(eq=False, kw_only=True)
-class InvocationErrored(SuspensionErrored): ...

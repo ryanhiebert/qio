@@ -10,9 +10,8 @@ from pathlib import Path
 from .broker import Broker
 from .consumer import Consumer
 from .invocation import Invocation
-from .invocation import InvocationErrored
+from .invocation import InvocationCompleted
 from .invocation import InvocationSubmitted
-from .invocation import InvocationSucceeded
 from .invocation import deserialize
 from .invocation import serialize
 from .journal import Journal
@@ -21,6 +20,8 @@ from .queue import Queue
 from .queue import ShutDown
 from .queuespec import QueueSpec
 from .registry import ROUTINE_REGISTRY
+from .result import Err
+from .result import Ok
 from .routine import Routine
 from .stream import Stream
 from .thread import Thread
@@ -119,7 +120,7 @@ class Qio:
     @contextmanager
     def invocation_handler(self) -> Generator[Future]:
         waiting: dict[str, Future] = {}
-        events = self.subscribe({InvocationSucceeded, InvocationErrored})
+        events = self.subscribe({InvocationCompleted})
 
         def resolver():
             while True:
@@ -129,11 +130,11 @@ class Qio:
                     break
 
                 match event:
-                    case InvocationSucceeded(id=invocation_id, value=value):
+                    case InvocationCompleted(id=invocation_id, result=Ok(value)):
                         if invocation_id in waiting:
                             future = waiting.pop(invocation_id)
                             future.set_result(value)
-                    case InvocationErrored(id=invocation_id, exception=exception):
+                    case InvocationCompleted(id=invocation_id, result=Err(exception)):
                         if invocation_id in waiting:
                             future = waiting.pop(invocation_id)
                             future.set_exception(exception)

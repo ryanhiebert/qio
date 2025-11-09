@@ -6,14 +6,14 @@ from contextlib import suppress
 from threading import Timer
 
 from .continuation import Continuation
-from .continuation import SendContinuation
-from .continuation import ThrowContinuation
 from .invocation import Invocation
 from .invocation import LocalInvocationSuspended
 from .qio import Qio
 from .queue import Queue
 from .queue import ShutDown
 from .queuespec import QueueSpec
+from .result import Err
+from .result import Ok
 from .thread import Thread
 
 
@@ -21,7 +21,7 @@ class Worker:
     def __init__(self, qio: Qio, queuespec: QueueSpec):
         self.__qio = qio
 
-        self.__tasks = Queue[Invocation | SendContinuation | ThrowContinuation]()
+        self.__tasks = Queue[Invocation | Continuation]()
         self.__consumer = self.__qio.consume(queuespec)
         self.__continuer_events = self.__qio.subscribe({LocalInvocationSuspended})
 
@@ -102,6 +102,7 @@ class Worker:
                     waiting[event.suspension.start()] = Continuation(
                         invocation=event.invocation,
                         generator=event.generator,
+                        result=Ok(None),
                     )
                     # Replace ``new`` before setting the result
                     # to avoid short busy wait loops.
@@ -137,10 +138,10 @@ class Worker:
                     )
                     with suppress(ShutDown):
                         self.__tasks.put(
-                            ThrowContinuation(
+                            Continuation(
                                 invocation=continuation.invocation,
                                 generator=continuation.generator,
-                                exception=exception,
+                                result=Err(exception),
                             )
                         )
                 else:
@@ -149,10 +150,10 @@ class Worker:
                     )
                     with suppress(ShutDown):
                         self.__tasks.put(
-                            SendContinuation(
+                            Continuation(
                                 invocation=continuation.invocation,
                                 generator=continuation.generator,
-                                value=value,
+                                result=Ok(value),
                             ),
                         )
 
@@ -180,7 +181,7 @@ class Worker:
                 case Invocation() as invocation:
                     self.__consumer.start(invocation)
                     self.__run_invocation(invocation)
-                case SendContinuation() | ThrowContinuation() as continuation:
+                case Continuation() as continuation:
                     self.__consumer.resume(continuation.invocation)
                     self.__run_continuation(continuation)
 
@@ -195,22 +196,18 @@ class Worker:
             if isinstance(result, Awaitable):
                 generator = result.__await__()
                 self.__run_continuation(
-                    SendContinuation(
+                    Continuation(
                         invocation=invocation,
                         generator=generator,
-                        value=None,
+                        result=Ok(None),
                     )
                 )
             else:
                 self.__consumer.succeed(invocation, result)
 
-    def __run_continuation(self, continuation: SendContinuation | ThrowContinuation):
+    def __run_continuation(self, continuation: Continuation):
         """Process a continuation task."""
-        match continuation:
-            case SendContinuation():
-                method = continuation.send
-            case ThrowContinuation():
-                method = continuation.throw
+        method = continuation.resume
 
         try:
             suspension = method()

@@ -4,16 +4,17 @@ from textual.widgets import DataTable
 from textual.widgets import Footer
 from textual.widgets import Header
 
+from .invocation import InvocationCompleted
 from .invocation import InvocationContinued
-from .invocation import InvocationErrored
 from .invocation import InvocationResumed
 from .invocation import InvocationStarted
 from .invocation import InvocationSubmitted
-from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspended
 from .invocation import InvocationThrew
 from .qio import Qio
 from .queue import ShutDown
+from .result import Err
+from .result import Ok
 from .thread import Thread
 
 
@@ -34,8 +35,7 @@ class Monitor(App):
                 InvocationContinued,
                 InvocationThrew,
                 InvocationResumed,
-                InvocationSucceeded,
-                InvocationErrored,
+                InvocationCompleted,
             }
         )
 
@@ -56,8 +56,7 @@ class Monitor(App):
         | InvocationContinued
         | InvocationThrew
         | InvocationResumed
-        | InvocationSucceeded
-        | InvocationErrored,
+        | InvocationCompleted,
     ):
         table = self.query_one(DataTable)
         match event:
@@ -99,13 +98,13 @@ class Monitor(App):
                     self.__column_keys[2],
                     "Resumed",
                 )
-            case InvocationSucceeded():
+            case InvocationCompleted(result=Ok()):
                 table.update_cell(
                     event.id,
                     self.__column_keys[2],
                     "Succeeded",
                 )
-            case InvocationErrored():
+            case InvocationCompleted(result=Err()):
                 table.update_cell(
                     event.id,
                     self.__column_keys[2],

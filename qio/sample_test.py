@@ -4,7 +4,7 @@ import sys
 import pytest
 
 from qio import Qio
-from qio.invocation import InvocationSucceeded
+from qio.invocation import InvocationCompleted
 from qio.sample import irregular
 
 
@@ -15,7 +15,7 @@ def test_integration():
 
     try:
         qio.purge(queue="qio")
-        events = qio.subscribe({InvocationSucceeded})
+        events = qio.subscribe({InvocationCompleted})
         invocation = irregular()
         qio.submit(invocation)
 

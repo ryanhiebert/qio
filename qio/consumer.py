@@ -5,11 +5,10 @@ from collections.abc import Iterator
 from typing import Any
 
 from .invocation import Invocation
+from .invocation import InvocationCompleted
 from .invocation import InvocationContinued
-from .invocation import InvocationErrored
 from .invocation import InvocationResumed
 from .invocation import InvocationStarted
-from .invocation import InvocationSucceeded
 from .invocation import InvocationSuspended
 from .invocation import InvocationThrew
 from .invocation import LocalInvocationContinued
@@ -17,6 +16,8 @@ from .invocation import LocalInvocationSuspended
 from .invocation import LocalInvocationThrew
 from .message import Message
 from .receiver import Receiver
+from .result import Err
+from .result import Ok
 from .stream import Stream
 from .suspension import Suspension
 
@@ -87,10 +88,12 @@ class Consumer(Iterable[Invocation]):
 
     def succeed(self, invocation: Invocation, value: Any):
         """Signal that the invocation has succeeded."""
-        self.__stream.publish(InvocationSucceeded(id=invocation.id, value=value))
+        self.__stream.publish(InvocationCompleted(id=invocation.id, result=Ok(value)))
         self.__receiver.finish(self.__invocations.pop(invocation))
 
     def error(self, invocation: Invocation, exception: Exception):
         """Signal that the invocation has errored."""
-        self.__stream.publish(InvocationErrored(id=invocation.id, exception=exception))
+        self.__stream.publish(
+            InvocationCompleted(id=invocation.id, result=Err(exception))
+        )
         self.__receiver.finish(self.__invocations.pop(invocation))

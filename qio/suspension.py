@@ -9,6 +9,7 @@ from typing import Self
 
 from .event import Event
 from .id import random_id
+from .result import Result
 
 
 @dataclass(eq=False, kw_only=True)
@@ -30,14 +31,5 @@ class SuspensionSubmitted(Event): ...
 
 
 @dataclass(eq=False, kw_only=True)
-class SuspensionCompleted(Event): ...
-
-
-@dataclass(eq=False, kw_only=True)
-class SuspensionSucceeded(SuspensionCompleted):
-    value: Any = field(repr=False)
-
-
-@dataclass(eq=False, kw_only=True)
-class SuspensionErrored(SuspensionCompleted):
-    exception: Exception = field(repr=False)
+class SuspensionCompleted(Event):
+    result: Result[Any, BaseException] = field(repr=False)
