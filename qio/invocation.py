@@ -12,6 +12,10 @@ from typing import Self
 from .event import Event
 from .id import random_id
 from .suspension import Suspension
+from .suspension import SuspensionCompleted
+from .suspension import SuspensionErrored
+from .suspension import SuspensionSubmitted
+from .suspension import SuspensionSucceeded
 
 
 @dataclass(eq=False, kw_only=True)
@@ -71,102 +75,71 @@ def deserialize(serialized: bytes, /) -> Invocation:
     )
 
 
-@dataclass(eq=False, kw_only=True)
-class InvocationEvent(Event):
-    id: str
-
-    def __repr__(self):
-        return f"<{type(self).__name__} {self.id}>"
-
-
 @dataclass(eq=False, kw_only=True, repr=False)
-class InvocationSubmitted(InvocationEvent):
+class InvocationSubmitted(SuspensionSubmitted):
     routine: str
     args: tuple[Any]
     kwargs: dict[str, Any]
 
-    def __repr__(self):
-        params_repr = ", ".join(
-            (*map(repr, self.args), *(f"{k}={v!r}" for k, v in self.kwargs.items())),
-        )
-        return f"<{type(self).__name__} {self.id} {self.routine}({params_repr})>"
 
-
-@dataclass(eq=False, kw_only=True, repr=False)
-class InvocationStarted(InvocationEvent): ...
+@dataclass(eq=False, kw_only=True)
+class InvocationStarted(Event): ...
 
 
 @dataclass(eq=False, kw_only=True)
-class BaseInvocationSuspended(InvocationEvent): ...
+class BaseInvocationSuspended(Event): ...
 
 
-@dataclass(eq=False, kw_only=True, repr=False)
+@dataclass(eq=False, kw_only=True)
 class InvocationSuspended(BaseInvocationSuspended): ...
 
 
-@dataclass(eq=False, kw_only=True, repr=False)
+@dataclass(eq=False, kw_only=True)
 class LocalInvocationSuspended(BaseInvocationSuspended):
-    suspension: Suspension
-    generator: Generator[Invocation, Any, Any]
-    invocation: Invocation
-
-    def __repr__(self):
-        return f"<{type(self).__name__} {self.id} suspension={self.suspension!r}>"
+    suspension: Suspension = field(repr=False)
+    generator: Generator[Invocation, Any, Any] = field(repr=False)
+    invocation: Invocation = field(repr=False)
 
 
 @dataclass(eq=False, kw_only=True)
-class BaseInvocationContinued(InvocationEvent):
+class BaseInvocationContinued(Event):
     value: Any
 
-    def __repr__(self):
-        return f"<{type(self).__name__} {self.id} value={self.value!r}>"
 
-
-@dataclass(eq=False, kw_only=True, repr=False)
+@dataclass(eq=False, kw_only=True)
 class InvocationContinued(BaseInvocationContinued): ...
 
 
-@dataclass(eq=False, kw_only=True, repr=False)
+@dataclass(eq=False, kw_only=True)
 class LocalInvocationContinued(BaseInvocationContinued):
-    generator: Generator[Invocation, Any, Any]
+    generator: Generator[Suspension, Any, Any] = field(repr=False)
 
 
 @dataclass(eq=False, kw_only=True)
-class BaseInvocationThrew(InvocationEvent):
+class BaseInvocationThrew(Event):
     exception: Exception
 
-    def __repr__(self):
-        return f"<{type(self).__name__} {self.id} exception={self.exception!r}>"
 
-
-@dataclass(eq=False, kw_only=True, repr=False)
+@dataclass(eq=False, kw_only=True)
 class InvocationThrew(BaseInvocationThrew): ...
 
 
-@dataclass(eq=False, kw_only=True, repr=False)
+@dataclass(eq=False, kw_only=True)
 class LocalInvocationThrew(BaseInvocationThrew):
-    generator: Generator[Invocation, Any, Any]
-
-
-@dataclass(eq=False, kw_only=True, repr=False)
-class InvocationResumed(InvocationEvent): ...
-
-
-@dataclass(eq=False, kw_only=True, repr=False)
-class InvocationCompleted(InvocationEvent): ...
+    generator: Generator[Suspension, Any, Any] = field(repr=False)
 
 
 @dataclass(eq=False, kw_only=True)
-class InvocationSucceeded(InvocationCompleted):
-    value: Any
-
-    def __repr__(self):
-        return f"<{type(self).__name__} {self.id} value={self.value!r}>"
+class InvocationResumed(Event): ...
 
 
 @dataclass(eq=False, kw_only=True)
-class InvocationErrored(InvocationCompleted):
-    exception: Exception
+class InvocationCompleted(SuspensionCompleted): ...
 
-    def __repr__(self):
-        return f"<{type(self).__name__} {self.id} exception={self.exception!r}>"
+
+@dataclass(eq=False, kw_only=True)
+class InvocationSucceeded(SuspensionSucceeded): ...
+
+
+@dataclass(eq=False, kw_only=True)
+class InvocationErrored(SuspensionErrored): ...
