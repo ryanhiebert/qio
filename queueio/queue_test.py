@@ -2,13 +2,13 @@ import time
 
 import pytest
 
-from qio.queue import Collision
-from qio.queue import Queue
-from qio.queue import ShutDown
-from qio.queue import SwapQueue
-from qio.queue import SyncQueue
-from qio.select import select
-from qio.thread import Thread
+from queueio.queue import Collision
+from queueio.queue import Queue
+from queueio.queue import ShutDown
+from queueio.queue import SwapQueue
+from queueio.queue import SyncQueue
+from queueio.select import select
+from queueio.thread import Thread
 
 
 class TestQueue:

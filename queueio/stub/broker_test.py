@@ -1,6 +1,6 @@
 import pytest
 
-from qio.broker_test import BaseBrokerTest
+from queueio.broker_test import BaseBrokerTest
 
 from .broker import StubBroker
 

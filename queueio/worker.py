@@ -8,9 +8,9 @@ from threading import Timer
 from .continuation import Continuation
 from .invocation import Invocation
 from .invocation import LocalInvocationSuspended
-from .qio import Qio
 from .queue import Queue
 from .queue import ShutDown
+from .queueio import QueueIO
 from .queuespec import QueueSpec
 from .result import Err
 from .result import Ok
@@ -18,24 +18,26 @@ from .thread import Thread
 
 
 class Worker:
-    def __init__(self, qio: Qio, queuespec: QueueSpec):
-        self.__qio = qio
+    def __init__(self, queueio: QueueIO, queuespec: QueueSpec):
+        self.__queueio = queueio
 
         self.__tasks = Queue[Invocation | Continuation]()
-        self.__consumer = self.__qio.consume(queuespec)
-        self.__continuer_events = self.__qio.subscribe({LocalInvocationSuspended})
+        self.__consumer = self.__queueio.consume(queuespec)
+        self.__continuer_events = self.__queueio.subscribe({LocalInvocationSuspended})
 
         # Start threads event queues are created
         self.__runner_threads = [
-            Thread(target=self.__runner, name=f"qio-runner-{i + 1}")
+            Thread(target=self.__runner, name=f"queueio-runner-{i + 1}")
             for i in range(queuespec.concurrency)
         ]
-        self.__continuer_thread = Thread(target=self.__continuer, name="qio-continuer")
-        self.__receiver_thread = Thread(target=self.__receiver, name="qio-receiver")
+        self.__continuer_thread = Thread(
+            target=self.__continuer, name="queueio-continuer"
+        )
+        self.__receiver_thread = Thread(target=self.__receiver, name="queueio-receiver")
         self.__timers: dict[str, Timer] = {}
 
     def __call__(self):
-        with self.__qio.invocation_handler() as invocation_handler_future:
+        with self.__queueio.invocation_handler() as invocation_handler_future:
             try:
                 for thread in self.__runner_threads:
                     thread.start()
@@ -187,7 +189,7 @@ class Worker:
 
     def __run_invocation(self, invocation: Invocation):
         """Process an invocation task."""
-        routine = self.__qio.routine(invocation.routine)
+        routine = self.__queueio.routine(invocation.routine)
         try:
             result = routine.fn(*invocation.args, **invocation.kwargs)
         except Exception as exception:
@@ -231,7 +233,7 @@ class Worker:
         self.__tasks.shutdown(immediate=True)
         for timer in self.__timers.values():
             timer.cancel()
-        self.__qio.shutdown()
+        self.__queueio.shutdown()
         self.__continuer_thread.join()
         self.__receiver_thread.join()
         for thread in self.__runner_threads:

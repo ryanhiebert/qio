@@ -1,7 +1,7 @@
-qio
-===
+queueio
+=======
 
-![qio Logo](logo.png)
+![queueio Logo](logo.svg)
 
 Python background queue processing with an async twist.
 
@@ -20,16 +20,16 @@ while also scaling well for processes that must take a long time.
 Ideally, coroutines could be serialized and resumed,
 perhaps even on a different machine.
 
-It is with this in mind that qio was created.
+It is with this in mind that queueio was created.
 It replaces other tools for complex workflows
 such as Celery signatures,
 and instead allows you to write complex workflows
 in a traditional imperative style.
 
-qio encourages you to use synchronous IO in routines.
+queueio encourages you to use synchronous IO in routines.
 Your routines are run on an isolated thread,
 but when they need to pause to call other routines,
-they can `await` those routines so that quo can
+they can `await` those routines so that queueio can
 continue processing other tasks,
 including the ones you're waiting on,
 so that the queue processing won't be blocked.

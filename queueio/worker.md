@@ -5,16 +5,16 @@ The `Worker` class processes invocations from message queues with specified conc
 ## Usage
 
 ```python
-from qio.qio import Qio
-from qio.queuespec import QueueSpec
-from qio.worker import Worker
+from queueio.queueio import QueueIO
+from queueio.queuespec import QueueSpec
+from queueio.worker import Worker
 
 # Create queue specification
 queuespec = QueueSpec.parse("production=5")
 
 # Create worker
-qio = Qio(broker=broker, journal=journal)
-worker = Worker(qio, queuespec)
+queueio = QueueIO(broker=broker, journal=journal)
+worker = Worker(queueio, queuespec)
 
 # Run worker (blocks until stopped)
 worker()
@@ -36,7 +36,7 @@ The worker spawns multiple runner threads based on the concurrency setting:
 ## CLI Integration
 
 ```bash
-python -m qio worker production=10
+python -m queueio worker production=10
 ```
 
 The CLI uses `QueueSpec.parse()` to convert string arguments into `QueueSpec` objects.

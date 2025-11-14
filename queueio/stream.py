@@ -13,7 +13,7 @@ class Stream:
     def __init__(self, journal: Journal):
         self.__journal = journal
         self.__subscriptions: dict[type, set[Queue[Any]]] = {}
-        self.__listener = Thread(target=self.__listen, name="qio-stream-listener")
+        self.__listener = Thread(target=self.__listen, name="queueio-stream-listener")
         self.__listener.start()
 
     def __listen(self):

@@ -27,7 +27,7 @@ from .stream import Stream
 from .thread import Thread
 
 
-class Qio:
+class QueueIO:
     def __init__(
         self,
         *,
@@ -50,18 +50,18 @@ class Qio:
         if pyproject := self.__pyproject():
             with pyproject.open("rb") as f:
                 config = tomllib.load(f)
-            return config.get("tool", {}).get("qio", {})
+            return config.get("tool", {}).get("queueio", {})
         return {}
 
     def __default_broker(self) -> Broker:
-        broker_uri = os.environ.get("QIO_BROKER")
+        broker_uri = os.environ.get("QUEUEIO_BROKER")
         if not broker_uri:
             config = self.__config()
             broker_uri = config.get("broker")
             if not broker_uri:
                 raise ValueError(
-                    "No broker URI configured. Set QIO_BROKER env var "
-                    "or add 'broker' to [tool.qio] in pyproject.toml"
+                    "No broker URI configured. Set QUEUEIO_BROKER env var "
+                    "or add 'broker' to [tool.queueio] in pyproject.toml"
                 )
 
         if not broker_uri.startswith("pika:"):
@@ -72,14 +72,14 @@ class Qio:
         return PikaBroker.from_uri(broker_uri)
 
     def __default_journal(self) -> Journal:
-        journal_uri = os.environ.get("QIO_JOURNAL")
+        journal_uri = os.environ.get("QUEUEIO_JOURNAL")
         if not journal_uri:
             config = self.__config()
             journal_uri = config.get("journal")
             if not journal_uri:
                 raise ValueError(
-                    "No journal URI configured. Set JOURNAL env var "
-                    "or add 'journal' to [tool.qio] in pyproject.toml"
+                    "No journal URI configured. Set QUEUEIO_JOURNAL env var "
+                    "or add 'journal' to [tool.queueio] in pyproject.toml"
                 )
 
         if not journal_uri.startswith("pika:"):

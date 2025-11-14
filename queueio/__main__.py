@@ -4,7 +4,7 @@ from typer import Argument
 from typer import Typer
 
 from .monitor import Monitor
-from .qio import Qio
+from .queueio import QueueIO
 from .queuespec import QueueSpec
 from .worker import Worker
 
@@ -14,9 +14,9 @@ app = Typer()
 @app.command()
 def routines():
     """Show all registered routines."""
-    qio = Qio()
+    queueio = QueueIO()
     try:
-        routines = qio.routines()
+        routines = queueio.routines()
 
         if not routines:
             print("No routines registered.")
@@ -36,25 +36,25 @@ def routines():
         for routine, path in zip(routines, function_paths, strict=False):
             print(f"{routine.name:<{name_width}} | {path:<{path_width}}")
     finally:
-        qio.shutdown()
+        queueio.shutdown()
 
 
 @app.command()
 def monitor(raw: bool = False):
-    """Monitor qio events.
+    """Monitor queueio events.
 
-    Shows a live view of qio activity. Use --raw for detailed event output.
+    Shows a live view of queueio activity. Use --raw for detailed event output.
     """
     if raw:
-        qio = Qio()
-        events = qio.subscribe({object})
+        queueio = QueueIO()
+        events = queueio.subscribe({object})
         try:
             while True:
                 print(events.get())
         except KeyboardInterrupt:
             print("Shutting down gracefully.")
         finally:
-            qio.shutdown()
+            queueio.shutdown()
     else:
         Monitor().run()
 
@@ -76,8 +76,8 @@ def worker(
     The worker will process invocations from the specified queue,
     as many at a time as specified by the concurrency.
     """
-    qio = Qio()
-    Worker(qio, queuespec)()
+    queueio = QueueIO()
+    Worker(queueio, queuespec)()
 
 
 @app.command()
@@ -86,7 +86,7 @@ def purge(
         str,
         Argument(
             help="Comma-separated list of queues to purge. "
-            "Examples: 'qio', 'production,background'",
+            "Examples: 'queueio', 'production,background'",
             metavar="QUEUE[,QUEUE2,...]",
         ),
     ],
@@ -96,7 +96,7 @@ def purge(
     This will remove all pending messages from the given queues.
     Use with caution as this operation cannot be undone.
     """
-    qio = Qio()
+    queueio = QueueIO()
     try:
         queue_list = [q.strip() for q in queues.split(",") if q.strip()]
         if not queue_list:
@@ -105,11 +105,11 @@ def purge(
 
         for queue in queue_list:
             print(f"Purging queue: {queue}")
-            qio.purge(queue=queue)
+            queueio.purge(queue=queue)
 
         print(f"Successfully purged {len(queue_list)} queue(s)")
     finally:
-        qio.shutdown()
+        queueio.shutdown()
 
 
 if __name__ == "__main__":

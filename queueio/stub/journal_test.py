@@ -1,6 +1,6 @@
 import pytest
 
-from qio.journal_test import BaseJournalTest
+from queueio.journal_test import BaseJournalTest
 
 from .journal import StubJournal
 

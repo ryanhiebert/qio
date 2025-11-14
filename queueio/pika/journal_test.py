@@ -1,7 +1,7 @@
 import pytest
 from pika import ConnectionParameters
 
-from qio.journal_test import BaseJournalTest
+from queueio.journal_test import BaseJournalTest
 
 from .journal import PikaJournal
 

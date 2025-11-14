@@ -1,2 +1,2 @@
-from .qio import Qio as Qio
+from .queueio import QueueIO as QueueIO
 from .registry import routine as routine

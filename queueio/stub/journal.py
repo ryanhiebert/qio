@@ -1,9 +1,9 @@
 import threading
 from collections.abc import Iterator
 
-from qio.journal import Journal
-from qio.queue import Queue
-from qio.queue import ShutDown
+from queueio.journal import Journal
+from queueio.queue import Queue
+from queueio.queue import ShutDown
 
 
 class StubJournal(Journal):

@@ -3,9 +3,9 @@
 Example usage for a new broker implementation:
 
 ```python
-# qio/mybroker/broker_test.py
+# queueio/mybroker/broker_test.py
 import pytest
-from qio.broker_test_base import BaseBrokerTest
+from queueio.broker_test_base import BaseBrokerTest
 from .broker import MyBroker
 
 class TestMyBroker(BaseBrokerTest):
@@ -29,7 +29,7 @@ from functools import wraps
 
 import pytest
 
-from qio.queuespec import QueueSpec
+from queueio.queuespec import QueueSpec
 
 
 def skip_if_unsupported(feature_attr):

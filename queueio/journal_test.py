@@ -3,9 +3,9 @@
 Example usage for a new journal implementation:
 
 ```python
-# qio/myjournal/journal_test.py
+# queueio/myjournal/journal_test.py
 import pytest
-from qio.journal_test import BaseJournalTest
+from queueio.journal_test import BaseJournalTest
 from .journal import MyJournal
 
 class TestMyJournal(BaseJournalTest):

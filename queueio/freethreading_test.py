@@ -1,7 +1,7 @@
-"""Ensure that qio is freethreading capable.
+"""Ensure that queueio is freethreading capable.
 
 Applications can still import things that disable freethreading,
-but qio should not cause freethreading to be disabled.
+but queueio should not cause freethreading to be disabled.
 """
 
 import importlib
@@ -15,11 +15,13 @@ import pytest
     not hasattr(sys, "_is_gil_enabled"),
     reason="Free-threading not supported in this Python build",
 )
-def test_all_qio_modules_preserve_freethreading():
-    """Import all qio modules and ensure GIL remains disabled."""
-    import qio
+def test_all_queueio_modules_preserve_freethreading():
+    """Import all queueio modules and ensure GIL remains disabled."""
+    import queueio
 
-    for _, modname, _ in pkgutil.walk_packages(qio.__path__, f"{qio.__name__}."):
+    for _, modname, _ in pkgutil.walk_packages(
+        queueio.__path__, f"{queueio.__name__}."
+    ):
         if not modname.endswith("_test"):
             importlib.import_module(modname)
 

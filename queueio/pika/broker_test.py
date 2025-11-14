@@ -1,7 +1,7 @@
 import pytest
 from pika import ConnectionParameters
 
-from qio.broker_test import BaseBrokerTest
+from queueio.broker_test import BaseBrokerTest
 
 from .broker import PikaBroker
 

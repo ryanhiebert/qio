@@ -2,9 +2,9 @@ from collections.abc import Iterator
 from threading import Lock
 from typing import cast
 
-from qio.message import Message
-from qio.queuespec import QueueSpec
-from qio.receiver import Receiver
+from queueio.message import Message
+from queueio.queuespec import QueueSpec
+from queueio.receiver import Receiver
 
 from .threadsafe import ThreadsafeConnection
 

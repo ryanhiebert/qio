@@ -1,6 +1,6 @@
-# Qio Class Configuration
+# QueueIO Class Configuration
 
-The `Qio` class requires configuration of broker and journal connections through environment variables or config file settings. Environment variables always take precedence over config file settings.
+The `QueueIO` class requires configuration of broker and journal connections through environment variables or config file settings. Environment variables always take precedence over config file settings.
 
 ## Priority Order
 
@@ -9,17 +9,17 @@ The `Qio` class requires configuration of broker and journal connections through
 
 ## Environment Variables
 
-Set these environment variables to configure the `Qio` class:
+Set these environment variables to configure the `QueueIO` class:
 
-- `QIO_BROKER` - Broker connection URI
-- `QIO_JOURNAL` - Journal connection URI
+- `QUEUEIO_BROKER` - Broker connection URI
+- `QUEUEIO_JOURNAL` - Journal connection URI
 
 ## Configuration File
 
 Add configuration to your `pyproject.toml`:
 
 ```toml
-[tool.qio]
+[tool.queueio]
 broker = "pika://localhost:5672"
 journal = "pika://localhost:5672"
 ```

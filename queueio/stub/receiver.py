@@ -4,11 +4,11 @@ from collections.abc import Iterator
 from random import randrange
 from threading import Condition
 
-from qio.message import Message
-from qio.queue import Queue
-from qio.queue import ShutDown
-from qio.receiver import Receiver
-from qio.select import select
+from queueio.message import Message
+from queueio.queue import Queue
+from queueio.queue import ShutDown
+from queueio.receiver import Receiver
+from queueio.select import select
 
 
 class StubReceiver(Receiver):

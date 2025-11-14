@@ -7,7 +7,7 @@ from pika import BlockingConnection
 from pika import ConnectionParameters
 from pika import URLParameters
 
-from qio.journal import Journal
+from queueio.journal import Journal
 
 from ..queue import Queue
 from ..queue import ShutDown
@@ -34,7 +34,7 @@ class PikaJournal(Journal):
             self.__queue_name, "amq.topic", routing_key="#"
         )
         self.__subscribe_thread = Thread(
-            target=self.__listen, name="qio-journal-listener"
+            target=self.__listen, name="queueio-journal-listener"
         )
         self.__subscribe_thread.start()
 

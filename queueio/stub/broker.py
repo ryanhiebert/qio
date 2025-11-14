@@ -1,10 +1,10 @@
 from collections import defaultdict
 from threading import Lock
 
-from qio.broker import Broker
-from qio.message import Message
-from qio.queue import Queue
-from qio.queuespec import QueueSpec
+from queueio.broker import Broker
+from queueio.message import Message
+from queueio.queue import Queue
+from queueio.queuespec import QueueSpec
 
 from .receiver import StubReceiver
 

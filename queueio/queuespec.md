@@ -5,7 +5,7 @@ The `QueueSpec` class represents a parsed queue configuration for workers.
 ## Usage
 
 ```python
-from qio.queuespec import QueueSpec
+from queueio.queuespec import QueueSpec
 
 # Single queue
 spec = QueueSpec.parse("production=10")

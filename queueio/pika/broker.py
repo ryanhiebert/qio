@@ -3,8 +3,8 @@ from threading import Lock
 from pika import URLParameters
 from pika.connection import Parameters
 
-from qio.broker import Broker
-from qio.queuespec import QueueSpec
+from queueio.broker import Broker
+from queueio.queuespec import QueueSpec
 
 from .receiver import PikaReceiver
 from .threadsafe import ThreadsafeConnection

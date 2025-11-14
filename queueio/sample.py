@@ -1,13 +1,13 @@
 from contextlib import suppress
 from time import sleep as time_sleep
 
-from qio import routine
+from queueio import routine
 
 from .gather import gather
 from .sleep import sleep
 
 
-@routine(name="regular", queue="qio")
+@routine(name="regular", queue="queueio")
 def regular(instance: int, iterations: int):
     for i in range(iterations):
         print(f"Iteration {instance} {i} started")
@@ -16,12 +16,12 @@ def regular(instance: int, iterations: int):
     return f"Instance {instance} completed"
 
 
-@routine(name="raises", queue="qio")
+@routine(name="raises", queue="queueio")
 def raises():
     raise ValueError("This is a test exception")
 
 
-@routine(name="aregular", queue="qio")
+@routine(name="aregular", queue="queueio")
 async def aregular(instance: int, iterations: int):
     return await regular(instance, iterations)
 
@@ -34,13 +34,13 @@ async def abstract(instance: int, iterations: int):
     return await aregular(instance, iterations)
 
 
-@routine(name="irregular", queue="qio")
+@routine(name="irregular", queue="queueio")
 async def irregular():
     await regular(1, 2)
     print("irregular sleep started")
     time_sleep(0.1)
-    print("irregular sleep ended. Starting qio sleep.")
+    print("irregular sleep ended. Starting queueio sleep.")
     await sleep(0.4)
-    print("qio sleep ended")
+    print("queueio sleep ended")
     await gather(regular(7, 2), sleep(0.5), abstract(8, 1))
     return await abstract(2, 5)

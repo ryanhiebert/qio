@@ -11,23 +11,23 @@ from .invocation import InvocationStarted
 from .invocation import InvocationSubmitted
 from .invocation import InvocationSuspended
 from .invocation import InvocationThrew
-from .qio import Qio
 from .queue import ShutDown
+from .queueio import QueueIO
 from .result import Err
 from .result import Ok
 from .thread import Thread
 
 
 class Monitor(App):
-    """TUI for monitoring qio events."""
+    """TUI for monitoring queueio events."""
 
-    TITLE = "qio Monitor"
+    TITLE = "queueio Monitor"
 
     def __init__(self):
         super().__init__()
-        self.__qio = Qio()
+        self.__queueio = QueueIO()
         self.__thread = Thread(target=self.__listen)
-        self.__events = self.__qio.subscribe(
+        self.__events = self.__queueio.subscribe(
             {
                 InvocationSubmitted,
                 InvocationStarted,
@@ -65,7 +65,7 @@ class Monitor(App):
                     event.id,
                     event.routine,
                     "Submitted",
-                    self.__qio.routine(event.routine).queue,
+                    self.__queueio.routine(event.routine).queue,
                     key=event.id,
                 )
             case InvocationStarted():
@@ -122,5 +122,5 @@ class Monitor(App):
         self.__thread.start()
 
     def on_unmount(self) -> None:
-        self.__qio.shutdown()
+        self.__queueio.shutdown()
         self.__thread.join()
