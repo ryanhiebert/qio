@@ -1,10 +1,10 @@
 ![queueio](logo.svg)
 
-Python background queue processing with an async twist
-======================================================
+Queues with an async twist
+==========================
 
-Write synchronous functions for your regular background tasks,
-and manage complex background task sequences with async functions.
+Use async functions to manage complex background task workflows,
+and keep using synchronous functions for everything else.
 
 Getting Started
 ---------------
@@ -80,6 +80,7 @@ Stability
 ---------
 
 This is a new project.
-The design of the public API is under active development and subject to change. Release notes will provide clear upgrade instructions,
+The design of the public API is under active development and subject to change.
+Release notes will provide clear upgrade instructions,
 but backward compatibility and deprecation warnings
 will not generally be implemented.
