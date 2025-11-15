@@ -1,35 +1,85 @@
-queueio
-=======
+![queueio](logo.svg)
 
-![queueio Logo](logo.svg)
+Python background queue processing with an async twist
+======================================================
 
-Python background queue processing with an async twist.
+Write synchronous functions for your regular background tasks,
+and manage complex background task sequences with async functions.
 
-Principles
-----------
+Getting Started
+---------------
 
-There's been a great deal of momentum to embrace async functions,
-but they are confusing and split the world.
-Threads or green threads are often a better choice
-for common workloads.
+Install `queueio`:
 
-However, coroutines are a powerful way to implement state machines.
-Complex workflows can be represented as coroutines
-to allow thinking about things in a pull-based fashion,
-while also scaling well for processes that must take a long time.
-Ideally, coroutines could be serialized and resumed,
-perhaps even on a different machine.
+```sh
+pip install queueio
+```
 
-It is with this in mind that queueio was created.
-It replaces other tools for complex workflows
-such as Celery signatures,
-and instead allows you to write complex workflows
-in a traditional imperative style.
+Create your routines:
 
-queueio encourages you to use synchronous IO in routines.
-Your routines are run on an isolated thread,
-but when they need to pause to call other routines,
-they can `await` those routines so that queueio can
-continue processing other tasks,
-including the ones you're waiting on,
-so that the queue processing won't be blocked.
+```python
+# sample.py
+from queueio import QueueIO
+from queueio import routine
+from queueio.gather import gather
+from queueio.sleep import sleep
+from time import sleep as time_sleep
+
+
+@routine(name="blocking", queue="queueio")
+def blocking():
+    pass
+
+@routine(name="yielding", queue="queueio")
+async def yielding(iterations: int):
+    pass
+
+
+if __name__ == "__main__":
+    QueueIO().submit(yielding())  
+```
+
+Add the configuration to your `pyproject.toml`:
+
+```toml
+[tool.queueio]
+# Configure RabbitMQ
+broker = 'pika://guest:guest@localhost:5672/'
+journal = 'pika://guest:guest@localhost:5672/'
+# Register the modules that the worker should load to find your routines
+register = ["sample"]
+```
+
+The broker and journal can be configured with environment variables
+to allow a project to be deployed in multiple environments.
+
+```sh
+QUEUEIO_BROKER='amqp://guest:guest@localhost:5672/'
+QUEUEIO_JOURNAL='amqp://guest:guest@localhost:5672/'
+```
+
+Run your script to submit the routine to run on a worker:
+
+```sh
+python sample.py
+```
+
+Then run the worker to process submitted routines:
+
+```sh
+queueio worker queueio=3
+```
+
+Monitor the status of active routine invocations:
+
+```sh
+queueio monitor
+```
+
+Stability
+---------
+
+This is a new project.
+The design of the public API is under active development and subject to change. Release notes will provide clear upgrade instructions,
+but backward compatibility and deprecation warnings
+will not generally be implemented.

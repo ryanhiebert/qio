@@ -30,7 +30,6 @@ select = ["E", "F", "UP", "B", "SIM", "I"]
 
 [tool.ruff.lint.isort]
 force-single-line = true
-
 [tool.queueio]
 register = ["queueio.sample"]
 broker = "pika://localhost:5672"
@@ -39,8 +38,6 @@ journal = "pika://localhost:5672"
 [tool.coverage.run]
 branch = true
 source = ["queueio"]
-
-
 
 [build-system]
 requires = ["hatchling"]
