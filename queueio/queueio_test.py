@@ -67,8 +67,8 @@ def test_queueio_loads_configuration_from_pyproject(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "pika://localhost:5672"
-        journal = "pika://localhost:5672"
+        broker = "amqp://localhost:5672"
+        journal = "amqp://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -109,8 +109,8 @@ def test_queueio_allows_independent_broker_journal_override(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "pika://localhost:5672"
-        journal = "pika://localhost:5672"
+        broker = "amqp://localhost:5672"
+        journal = "amqp://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -193,8 +193,8 @@ def test_queueio_with_valid_config(tmp_path):
 
         [tool.queueio]
         register = ["queueio.samples.expanded"]
-        broker = "pika://localhost:5672"
-        journal = "pika://localhost:5672"
+        broker = "amqp://localhost:5672"
+        journal = "amqp://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -230,7 +230,7 @@ def test_queueio_with_invalid_config(tmp_path):
 
         [tool.queueio]
         broker = "unknown://localhost:5672"
-        journal = "pika://localhost:5672"
+        journal = "amqp://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -246,7 +246,7 @@ def test_queueio_with_invalid_config(tmp_path):
         # Should raise ValueError for unknown broker URI scheme
         with pytest.raises(
             ValueError,
-            match="URI scheme must be 'pika:', got: unknown://localhost:5672",
+            match="URI scheme must be 'amqp:', got: unknown://localhost:5672",
         ):
             QueueIO()
     finally:
@@ -269,7 +269,7 @@ def test_queueio_with_invalid_journal_config(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "pika://localhost:5672"
+        broker = "amqp://localhost:5672"
         journal = "unknown://localhost:5672"
         """
     config_file.write_text(config_content)
@@ -286,7 +286,7 @@ def test_queueio_with_invalid_journal_config(tmp_path):
         # Should raise ValueError for unknown journal URI scheme
         with pytest.raises(
             ValueError,
-            match="URI scheme must be 'pika:', got: unknown://localhost:5672",
+            match="URI scheme must be 'amqp:', got: unknown://localhost:5672",
         ):
             QueueIO()
     finally:
@@ -309,8 +309,8 @@ def test_queueio_with_uri_broker_config(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "pika://localhost:5672"
-        journal = "pika://localhost:5672"
+        broker = "amqp://localhost:5672"
+        journal = "amqp://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -349,8 +349,8 @@ def test_queueio_with_uri_journal_config(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "pika://localhost:5672"
-        journal = "pika://localhost:5672"
+        broker = "amqp://localhost:5672"
+        journal = "amqp://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -389,8 +389,8 @@ def test_queueio_with_both_uri_configs(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "pika://localhost:5672"
-        journal = "pika://localhost:5672"
+        broker = "amqp://localhost:5672"
+        journal = "amqp://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -430,7 +430,7 @@ def test_queueio_with_invalid_broker_uri_scheme(tmp_path):
 
         [tool.queueio]
         broker = "redis://localhost:6379"
-        journal = "pika://localhost:5672"
+        journal = "amqp://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -445,7 +445,7 @@ def test_queueio_with_invalid_broker_uri_scheme(tmp_path):
     try:
         # Should raise ValueError for invalid URI scheme
         with pytest.raises(
-            ValueError, match="URI scheme must be 'pika:', got: redis://localhost:6379"
+            ValueError, match="URI scheme must be 'amqp:', got: redis://localhost:6379"
         ):
             QueueIO()
     finally:
@@ -468,8 +468,8 @@ def test_queueio_with_both_environment_variables(tmp_path, monkeypatch):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "pika://config:5672"
-        journal = "pika://config:5672"
+        broker = "amqp://config:5672"
+        journal = "amqp://config:5672"
         """
     config_file.write_text(config_content)
 
@@ -482,8 +482,8 @@ def test_queueio_with_both_environment_variables(tmp_path, monkeypatch):
     ROUTINE_REGISTRY.clear()
 
     # Set both environment variables to use localhost (which works)
-    monkeypatch.setenv("QUEUEIO_BROKER", "pika://localhost:5672")
-    monkeypatch.setenv("QUEUEIO_JOURNAL", "pika://localhost:5672")
+    monkeypatch.setenv("QUEUEIO_BROKER", "amqp://localhost:5672")
+    monkeypatch.setenv("QUEUEIO_JOURNAL", "amqp://localhost:5672")
 
     try:
         queueio = QueueIO()
@@ -511,7 +511,7 @@ def test_queueio_with_invalid_environment_broker(monkeypatch):
     try:
         # Should raise ValueError for invalid URI scheme
         with pytest.raises(
-            ValueError, match="URI scheme must be 'pika:', got: redis://invalid:6379"
+            ValueError, match="URI scheme must be 'amqp:', got: redis://invalid:6379"
         ):
             QueueIO()
     finally:
@@ -532,7 +532,7 @@ def test_queueio_with_invalid_environment_journal(monkeypatch):
     try:
         # Should raise ValueError for invalid URI scheme
         with pytest.raises(
-            ValueError, match="URI scheme must be 'pika:', got: redis://invalid:6379"
+            ValueError, match="URI scheme must be 'amqp:', got: redis://invalid:6379"
         ):
             QueueIO()
     finally:
@@ -554,7 +554,7 @@ def test_queueio_with_invalid_journal_uri_scheme(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "pika://localhost:5672"
+        broker = "amqp://localhost:5672"
         journal = "redis://localhost:6379"
         """
     config_file.write_text(config_content)
@@ -570,7 +570,7 @@ def test_queueio_with_invalid_journal_uri_scheme(tmp_path):
     try:
         # Should raise ValueError for invalid URI scheme
         with pytest.raises(
-            ValueError, match="URI scheme must be 'pika:', got: redis://localhost:6379"
+            ValueError, match="URI scheme must be 'amqp:', got: redis://localhost:6379"
         ):
             QueueIO()
     finally:

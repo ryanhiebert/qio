@@ -13,8 +13,8 @@ class TestPikaJournal(BaseJournalTest):
         yield journal
         journal.shutdown()
 
-    def test_pika_jounal_from_uri(self):
+    def test_pika_journal_from_uri(self):
         """Test PikaJournal.from_uri creates journal successfully."""
-        journal = PikaJournal.from_uri("pika://localhost:5672")
+        journal = PikaJournal.from_uri("amqp://localhost:5672")
         assert isinstance(journal, PikaJournal)
         journal.shutdown()

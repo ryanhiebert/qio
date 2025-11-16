@@ -64,8 +64,8 @@ class QueueIO:
                     "or add 'broker' to [tool.queueio] in pyproject.toml"
                 )
 
-        if not broker_uri.startswith("pika:"):
-            raise ValueError(f"URI scheme must be 'pika:', got: {broker_uri}")
+        if not broker_uri.startswith("amqp:"):
+            raise ValueError(f"URI scheme must be 'amqp:', got: {broker_uri}")
 
         from .pika.broker import PikaBroker
 
@@ -82,8 +82,8 @@ class QueueIO:
                     "or add 'journal' to [tool.queueio] in pyproject.toml"
                 )
 
-        if not journal_uri.startswith("pika:"):
-            raise ValueError(f"URI scheme must be 'pika:', got: {journal_uri}")
+        if not journal_uri.startswith("amqp:"):
+            raise ValueError(f"URI scheme must be 'amqp:', got: {journal_uri}")
 
         from .pika.journal import PikaJournal
 

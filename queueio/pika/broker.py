@@ -16,8 +16,7 @@ class PikaBroker(Broker):
     @classmethod
     def from_uri(cls, uri: str, /):
         """Create a broker instance from a URI."""
-        amqp_uri = "amqp:" + uri.removeprefix("pika:")
-        return cls(URLParameters(amqp_uri))
+        return cls(URLParameters(uri))
 
     def __init__(self, connection_params: Parameters):
         self.__connection = ThreadsafeConnection(connection_params)

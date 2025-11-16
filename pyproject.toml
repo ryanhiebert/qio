@@ -52,8 +52,8 @@ register = [
     "queueio.samples.basic",
     "queueio.samples.expanded",
 ]
-broker = "pika://localhost:5672"
-journal = "pika://localhost:5672"
+broker = "amqp://localhost:5672"
+journal = "amqp://localhost:5672"
 
 [tool.pytest.ini_options]
 timeout = 30

@@ -56,8 +56,8 @@ Add the configuration to your `pyproject.toml`:
 ```toml
 [tool.queueio]
 # Configure RabbitMQ
-broker = "pika://guest:guest@localhost:5672/"
-journal = "pika://guest:guest@localhost:5672/"
+broker = "amqp://guest:guest@localhost:5672/"
+journal = "amqp://guest:guest@localhost:5672/"
 # Register the modules that the worker should load to find your routines
 register = ["basic"]
 ```

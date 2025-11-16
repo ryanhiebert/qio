@@ -18,6 +18,6 @@ class TestPikaBroker(BaseBrokerTest):
 
     def test_pika_broker_from_uri(self):
         """Test PikaBroker.from_uri with localhost URI creates broker successfully."""
-        broker = PikaBroker.from_uri("pika://localhost:5672")
+        broker = PikaBroker.from_uri("amqp://localhost:5672")
         assert isinstance(broker, PikaBroker)
         broker.shutdown()

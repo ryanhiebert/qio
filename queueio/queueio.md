@@ -20,18 +20,18 @@ Add configuration to your `pyproject.toml`:
 
 ```toml
 [tool.queueio]
-broker = "pika://localhost:5672"
-journal = "pika://localhost:5672"
+broker = "amqp://localhost:5672"
+journal = "amqp://localhost:5672"
 ```
 
 ## URI Format
 
-Currently only `pika://` URIs are supported:
+Currently only `amqp://` URIs are supported:
 
 ```
-pika://hostname:port
+amqp://hostname:port
 ```
 
 Examples:
-- `pika://localhost:5672`
-- `pika://rabbitmq.example.com:5672`
+- `amqp://localhost:5672`
+- `amqp://rabbitmq.example.com:5672`

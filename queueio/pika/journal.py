@@ -17,8 +17,7 @@ class PikaJournal(Journal):
     @classmethod
     def from_uri(cls, uri: str, /):
         """Create a journal instance from a URI."""
-        amqp_uri = "amqp:" + uri.removeprefix("pika:")
-        return cls(URLParameters(amqp_uri))
+        return cls(URLParameters(uri))
 
     def __init__(self, connection_params: ConnectionParameters | URLParameters):
         self.__connection_params = connection_params
