@@ -1,7 +1,7 @@
 ![queueio](logo.svg)
 
-Queues with an async twist
-==========================
+Python background queues with an async twist
+============================================
 
 Use async functions to manage complex background task workflows,
 and keep using synchronous functions for everything else.
