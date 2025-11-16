@@ -92,7 +92,7 @@ Stability
 ---------
 
 This is a new project.
-The design of the public API is under active development and subject to change.
+The design of the public API is under active development and will change.
 Release notes will provide clear upgrade instructions,
 but backward compatibility and deprecation warnings
 will not generally be implemented.
