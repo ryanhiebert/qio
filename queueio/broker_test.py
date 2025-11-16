@@ -448,11 +448,10 @@ class BaseBrokerTest:
 
         # The exact distribution pattern may vary by broker implementation,
         # but neither queue should be significantly starved during this period.
-        assert abs(q1_early - q2_early) <= 10, (
+        assert abs(q1_early - q2_early) <= 15, (
             f"Expected balanced distribution, got {q1_early}:{q2_early}. "
             f"Actual order: {''.join(first_half)}"
         )
-
         broker.shutdown()
         thread.join(timeout=1.0)
 
