@@ -5,6 +5,7 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     services:
       rabbitmq:
         image: rabbitmq
@@ -34,3 +35,4 @@ jobs:
         run: uv run basedpyright
       - name: Run tests
         run: uv run pytest
+        timeout-minutes: 2

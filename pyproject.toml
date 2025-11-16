@@ -55,6 +55,9 @@ register = [
 broker = "pika://localhost:5672"
 journal = "pika://localhost:5672"
 
+[tool.pytest.ini_options]
+timeout = 30
+
 [tool.coverage.run]
 branch = true
 source = ["queueio"]
