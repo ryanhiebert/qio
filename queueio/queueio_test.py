@@ -192,7 +192,7 @@ def test_queueio_with_valid_config(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        register = ["queueio.sample"]
+        register = ["queueio.samples.expanded"]
         broker = "pika://localhost:5672"
         journal = "pika://localhost:5672"
         """

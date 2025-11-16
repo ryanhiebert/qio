@@ -1,10 +1,10 @@
 from contextlib import suppress
 from time import sleep as time_sleep
 
+from queueio import QueueIO
 from queueio import routine
-
-from .gather import gather
-from .sleep import sleep
+from queueio.gather import gather
+from queueio.sleep import sleep
 
 
 @routine(name="regular", queue="queueio")
@@ -44,3 +44,11 @@ async def irregular():
     print("queueio sleep ended")
     await gather(regular(7, 2), sleep(0.5), abstract(8, 1))
     return await abstract(2, 5)
+
+
+if __name__ == "__main__":
+    q = QueueIO()
+    try:
+        q.submit(irregular())
+    finally:
+        q.shutdown()

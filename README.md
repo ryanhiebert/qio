@@ -18,25 +18,37 @@ pip install queueio
 Create your routines:
 
 ```python
-# sample.py
+# basic.py
+from time import sleep as time_sleep
+
 from queueio import QueueIO
 from queueio import routine
 from queueio.gather import gather
 from queueio.sleep import sleep
-from time import sleep as time_sleep
 
 
 @routine(name="blocking", queue="queueio")
 def blocking():
-    pass
+    time_sleep(0.1)  # Regular blocking call
+
 
 @routine(name="yielding", queue="queueio")
 async def yielding(iterations: int):
-    pass
+    # Do them two at a time
+    for _ in range(iterations // 2):
+        await gather(blocking(), blocking())
+        await sleep(0.2)  # Release processing capacity
+    if iterations % 2 == 1:
+        await blocking()
 
 
 if __name__ == "__main__":
-    QueueIO().submit(yielding())  
+    q = QueueIO()
+    try:
+        q.submit(yielding(7))
+    finally:
+        q.shutdown()
+
 ```
 
 Add the configuration to your `pyproject.toml`:
@@ -44,10 +56,10 @@ Add the configuration to your `pyproject.toml`:
 ```toml
 [tool.queueio]
 # Configure RabbitMQ
-broker = 'pika://guest:guest@localhost:5672/'
-journal = 'pika://guest:guest@localhost:5672/'
+broker = "pika://guest:guest@localhost:5672/"
+journal = "pika://guest:guest@localhost:5672/"
 # Register the modules that the worker should load to find your routines
-register = ["sample"]
+register = ["basic"]
 ```
 
 The broker and journal can be configured with environment variables
@@ -61,7 +73,7 @@ QUEUEIO_JOURNAL='amqp://guest:guest@localhost:5672/'
 Run your script to submit the routine to run on a worker:
 
 ```sh
-python sample.py
+python basic.py
 ```
 
 Then run the worker to process submitted routines:
