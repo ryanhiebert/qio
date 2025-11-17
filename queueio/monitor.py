@@ -4,13 +4,7 @@ from textual.widgets import DataTable
 from textual.widgets import Footer
 from textual.widgets import Header
 
-from .invocation import InvocationCompleted
-from .invocation import InvocationContinued
-from .invocation import InvocationResumed
-from .invocation import InvocationStarted
-from .invocation import InvocationSubmitted
-from .invocation import InvocationSuspended
-from .invocation import InvocationThrew
+from .invocation import Invocation
 from .queue import ShutDown
 from .queueio import QueueIO
 from .result import Err
@@ -29,13 +23,13 @@ class Monitor(App):
         self.__thread = Thread(target=self.__listen)
         self.__events = self.__queueio.subscribe(
             {
-                InvocationSubmitted,
-                InvocationStarted,
-                InvocationSuspended,
-                InvocationContinued,
-                InvocationThrew,
-                InvocationResumed,
-                InvocationCompleted,
+                Invocation.Submitted,
+                Invocation.Started,
+                Invocation.Suspended,
+                Invocation.Continued,
+                Invocation.Threw,
+                Invocation.Resumed,
+                Invocation.Completed,
             }
         )
 
@@ -50,17 +44,17 @@ class Monitor(App):
 
     def handle_invocation_event(
         self,
-        event: InvocationSubmitted
-        | InvocationStarted
-        | InvocationSuspended
-        | InvocationContinued
-        | InvocationThrew
-        | InvocationResumed
-        | InvocationCompleted,
+        event: Invocation.Submitted
+        | Invocation.Started
+        | Invocation.Suspended
+        | Invocation.Continued
+        | Invocation.Threw
+        | Invocation.Resumed
+        | Invocation.Completed,
     ):
         table = self.query_one(DataTable)
         match event:
-            case InvocationSubmitted():
+            case Invocation.Submitted():
                 table.add_row(
                     event.id,
                     event.routine,
@@ -68,43 +62,43 @@ class Monitor(App):
                     self.__queueio.routine(event.routine).queue,
                     key=event.id,
                 )
-            case InvocationStarted():
+            case Invocation.Started():
                 table.update_cell(
                     event.id,
                     self.__column_keys[2],
                     "Started",
                 )
-            case InvocationSuspended():
+            case Invocation.Suspended():
                 table.update_cell(
                     event.id,
                     self.__column_keys[2],
                     "Suspended",
                 )
-            case InvocationContinued():
+            case Invocation.Continued():
                 table.update_cell(
                     event.id,
                     self.__column_keys[2],
                     "Continued",
                 )
-            case InvocationThrew():
+            case Invocation.Threw():
                 table.update_cell(
                     event.id,
                     self.__column_keys[2],
                     "Threw",
                 )
-            case InvocationResumed():
+            case Invocation.Resumed():
                 table.update_cell(
                     event.id,
                     self.__column_keys[2],
                     "Resumed",
                 )
-            case InvocationCompleted(result=Ok()):
+            case Invocation.Completed(result=Ok()):
                 table.update_cell(
                     event.id,
                     self.__column_keys[2],
                     "Succeeded",
                 )
-            case InvocationCompleted(result=Err()):
+            case Invocation.Completed(result=Err()):
                 table.update_cell(
                     event.id,
                     self.__column_keys[2],

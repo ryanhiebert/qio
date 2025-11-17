@@ -10,10 +10,6 @@ from pathlib import Path
 from .broker import Broker
 from .consumer import Consumer
 from .invocation import Invocation
-from .invocation import InvocationCompleted
-from .invocation import InvocationSubmitted
-from .invocation import deserialize
-from .invocation import serialize
 from .journal import Journal
 from .message import Message
 from .queue import Queue
@@ -120,7 +116,7 @@ class QueueIO:
     @contextmanager
     def invocation_handler(self) -> Generator[Future]:
         waiting: dict[str, Future] = {}
-        events = self.subscribe({InvocationCompleted})
+        events = self.subscribe({Invocation.Completed})
 
         def resolver():
             while True:
@@ -130,11 +126,11 @@ class QueueIO:
                     break
 
                 match event:
-                    case InvocationCompleted(id=invocation_id, result=Ok(value)):
+                    case Invocation.Completed(id=invocation_id, result=Ok(value)):
                         if invocation_id in waiting:
                             future = waiting.pop(invocation_id)
                             future.set_result(value)
-                    case InvocationCompleted(id=invocation_id, result=Err(exception)):
+                    case Invocation.Completed(id=invocation_id, result=Err(exception)):
                         if invocation_id in waiting:
                             future = waiting.pop(invocation_id)
                             future.set_exception(exception)
@@ -159,7 +155,7 @@ class QueueIO:
         """Submit an invocation to be run in the background."""
         routine = self.routine(invocation.routine)
         self.__stream.publish(
-            InvocationSubmitted(
+            Invocation.Submitted(
                 id=invocation.id,
                 routine=invocation.routine,
                 args=invocation.args,
@@ -167,13 +163,13 @@ class QueueIO:
             )
         )
         queue = routine.queue
-        self.__broker.enqueue(serialize(invocation), queue=queue)
+        self.__broker.enqueue(invocation.serialize(), queue=queue)
 
     def consume(self, queuespec: QueueSpec, /) -> Consumer:
         return Consumer(
             stream=self.__stream,
             receiver=self.__broker.receive(queuespec),
-            deserialize=deserialize,
+            deserialize=Invocation.deserialize,
         )
 
     def shutdown(self):

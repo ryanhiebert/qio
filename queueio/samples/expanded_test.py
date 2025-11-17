@@ -4,7 +4,7 @@ import sys
 import pytest
 
 from queueio import QueueIO
-from queueio.invocation import InvocationCompleted
+from queueio.invocation import Invocation
 
 from .expanded import irregular
 
@@ -16,7 +16,7 @@ def test_integration():
 
     try:
         queueio.purge(queue="queueio")
-        events = queueio.subscribe({InvocationCompleted})
+        events = queueio.subscribe({Invocation.Completed})
         invocation = irregular()
         queueio.submit(invocation)
 

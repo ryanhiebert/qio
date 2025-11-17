@@ -7,7 +7,6 @@ from threading import Timer
 
 from .continuation import Continuation
 from .invocation import Invocation
-from .invocation import LocalInvocationSuspended
 from .queue import Queue
 from .queue import ShutDown
 from .queueio import QueueIO
@@ -23,7 +22,7 @@ class Worker:
 
         self.__tasks = Queue[Invocation | Continuation]()
         self.__consumer = self.__queueio.consume(queuespec)
-        self.__continuer_events = self.__queueio.subscribe({LocalInvocationSuspended})
+        self.__continuer_events = self.__queueio.subscribe({Invocation.LocalSuspended})
 
         # Start threads event queues are created
         self.__runner_threads = [

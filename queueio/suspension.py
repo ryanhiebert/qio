@@ -25,11 +25,9 @@ class Suspension[R](Awaitable[R]):
     def __await__(self) -> Generator[Self, R, R]:
         return (yield self)
 
+    @dataclass(eq=False, kw_only=True)
+    class Submitted(Event): ...
 
-@dataclass(eq=False, kw_only=True)
-class SuspensionSubmitted(Event): ...
-
-
-@dataclass(eq=False, kw_only=True)
-class SuspensionCompleted(Event):
-    result: Result[Any, BaseException] = field(repr=False)
+    @dataclass(eq=False, kw_only=True)
+    class Completed(Event):
+        result: Result[Any, BaseException] = field(repr=False)
