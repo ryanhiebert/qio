@@ -43,10 +43,10 @@ class Invocation[R](Suspension[R]):
     def __await__(self):
         return (yield self)
 
-    def start(self) -> Future[R]:
+    def submit(self) -> Future[R]:
         handler = self.__handler.get()
         if handler is None:
-            raise RuntimeError("No invocation runner configured.")
+            raise RuntimeError("No invocation handler is set")
         return handler(self)
 
     def serialize(self) -> bytes:

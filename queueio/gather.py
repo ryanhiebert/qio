@@ -13,9 +13,11 @@ class Gather[T](Suspension[T]):
         super().__init__()
         self.__awaitables = awaitables
 
-    def start(self) -> Future[T]:
+    def submit(self) -> Future[T]:
         gathered = Future()
-        futures = [suspension.start() for suspension in map(suspend, self.__awaitables)]
+        futures = [
+            suspension.submit() for suspension in map(suspend, self.__awaitables)
+        ]
 
         # concurrent.futures.Future doesn't give us a way to be notified
         # when a future is running, so we can't reasonably determine when

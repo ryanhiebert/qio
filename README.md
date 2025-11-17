@@ -44,7 +44,7 @@ async def yielding(iterations: int):
 
 if __name__ == "__main__":
     with activate():
-        yielding(7).start()
+        yielding(7).submit()
 
 ```
 

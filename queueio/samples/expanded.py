@@ -48,4 +48,4 @@ async def irregular():
 
 if __name__ == "__main__":
     with activate():
-        irregular().start()
+        irregular().submit()

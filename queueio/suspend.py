@@ -20,7 +20,7 @@ class Suspend[R](Suspension[R]):
         self.__future.add_done_callback(self.__done_callback)
         self.__cancelled = False
 
-    def start(self) -> Future[R]:
+    def submit(self) -> Future[R]:
         self.__thread.start()
         return self.__future
 
@@ -45,7 +45,7 @@ class Suspend[R](Suspension[R]):
                 self.__future.set_exception(e)
             else:
                 try:
-                    next_step = partial(generator.send, suspension.start().result())
+                    next_step = partial(generator.send, suspension.submit().result())
                 except BaseException as e:
                     next_step = partial(generator.throw, e)
 

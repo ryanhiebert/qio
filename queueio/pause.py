@@ -9,7 +9,7 @@ from .suspension import Suspension
 class Pause(Suspension[None]):
     interval: float
 
-    def start(self):
+    def submit(self):
         future = Future[None]()
         timer = Timer(self.interval, lambda: future.set_result(None))
         future.add_done_callback(lambda _: timer.cancel())

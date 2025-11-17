@@ -110,7 +110,7 @@ class QueueIO:
 
     def run[R](self, invocation: Invocation[R], /) -> R:
         with self.invocation_handler():
-            return invocation.start().result()
+            return invocation.submit().result()
 
     def purge(self, *, queue: str):
         self.__broker.purge(queue=queue)

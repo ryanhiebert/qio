@@ -19,7 +19,7 @@ class Suspension[R](Awaitable[R]):
     id: str = field(default_factory=random_id)
 
     @abstractmethod
-    def start(self) -> Future[R]:
+    def submit(self) -> Future[R]:
         raise NotImplementedError("Subclasses must implement this method.")
 
     def __await__(self) -> Generator[Self, R, R]:

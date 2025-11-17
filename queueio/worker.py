@@ -100,7 +100,7 @@ class Worker:
                     return
                 else:
                     # convert to future here to make results easier
-                    waiting[event.suspension.start()] = Continuation(
+                    waiting[event.suspension.submit()] = Continuation(
                         invocation=event.invocation,
                         generator=event.generator,
                         result=Ok(None),
