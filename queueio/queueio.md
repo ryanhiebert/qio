@@ -1,6 +1,6 @@
 # QueueIO Class Configuration
 
-The `QueueIO` class requires configuration of broker and journal connections through environment variables or config file settings. Environment variables always take precedence over config file settings.
+The `QueueIO` class requires configuration of a pika connection through environment variables or config file settings. Environment variables always take precedence over config file settings.
 
 ## Priority Order
 
@@ -9,10 +9,9 @@ The `QueueIO` class requires configuration of broker and journal connections thr
 
 ## Environment Variables
 
-Set these environment variables to configure the `QueueIO` class:
+Set this environment variable to configure the `QueueIO` class:
 
-- `QUEUEIO_BROKER` - Broker connection URI
-- `QUEUEIO_JOURNAL` - Journal connection URI
+- `QUEUEIO_PIKA` - Pika connection URI
 
 ## Configuration File
 
@@ -20,8 +19,7 @@ Add configuration to your `pyproject.toml`:
 
 ```toml
 [tool.queueio]
-broker = "amqp://localhost:5672"
-journal = "amqp://localhost:5672"
+pika = "amqp://localhost:5672"
 ```
 
 ## URI Format

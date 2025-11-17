@@ -55,7 +55,7 @@ def test_different_queueio_instances_are_independent():
 
 
 def test_queueio_loads_configuration_from_pyproject(tmp_path):
-    """QueueIO loads broker and journal configuration from pyproject.toml."""
+    """QueueIO loads pika configuration from pyproject.toml."""
 
     # Create config with default settings
     config_dir = tmp_path / "default_config"
@@ -67,8 +67,7 @@ def test_queueio_loads_configuration_from_pyproject(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "amqp://localhost:5672"
-        journal = "amqp://localhost:5672"
+        pika = "amqp://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -96,10 +95,10 @@ def test_queueio_loads_configuration_from_pyproject(tmp_path):
         ROUTINE_REGISTRY.update(original_registry)
 
 
-def test_queueio_allows_independent_broker_journal_override(tmp_path):
-    """QueueIO allows independent override of broker or journal."""
+def test_queueio_allows_pika_override(tmp_path):
+    """QueueIO allows override of pika configuration via environment variable."""
 
-    # Create config for default broker/journal
+    # Create config for default pika
     config_dir = tmp_path / "override_test"
     config_dir.mkdir()
     config_file = config_dir / "pyproject.toml"
@@ -109,8 +108,7 @@ def test_queueio_allows_independent_broker_journal_override(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "amqp://localhost:5672"
-        journal = "amqp://localhost:5672"
+        pika = "amqp://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -193,8 +191,7 @@ def test_queueio_with_valid_config(tmp_path):
 
         [tool.queueio]
         register = ["queueio.samples.expanded"]
-        broker = "amqp://localhost:5672"
-        journal = "amqp://localhost:5672"
+        pika = "amqp://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -229,8 +226,7 @@ def test_queueio_with_invalid_config(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "unknown://localhost:5672"
-        journal = "amqp://localhost:5672"
+        pika = "unknown://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -269,8 +265,7 @@ def test_queueio_with_invalid_journal_config(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "amqp://localhost:5672"
-        journal = "unknown://localhost:5672"
+        pika = "unknown://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -309,8 +304,7 @@ def test_queueio_with_uri_broker_config(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "amqp://localhost:5672"
-        journal = "amqp://localhost:5672"
+        pika = "amqp://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -349,8 +343,7 @@ def test_queueio_with_uri_journal_config(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "amqp://localhost:5672"
-        journal = "amqp://localhost:5672"
+        pika = "amqp://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -389,8 +382,7 @@ def test_queueio_with_both_uri_configs(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "amqp://localhost:5672"
-        journal = "amqp://localhost:5672"
+        pika = "amqp://localhost:5672"
         """
     config_file.write_text(config_content)
 
@@ -429,8 +421,7 @@ def test_queueio_with_invalid_broker_uri_scheme(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "redis://localhost:6379"
-        journal = "amqp://localhost:5672"
+        pika = "redis://localhost:6379"
         """
     config_file.write_text(config_content)
 
@@ -455,10 +446,10 @@ def test_queueio_with_invalid_broker_uri_scheme(tmp_path):
         ROUTINE_REGISTRY.update(original_registry)
 
 
-def test_queueio_with_both_environment_variables(tmp_path, monkeypatch):
-    """QueueIO prefers both environment variables over config."""
+def test_queueio_with_environment_variable(tmp_path, monkeypatch):
+    """QueueIO prefers environment variable over config."""
 
-    # Create config with different broker/journal
+    # Create config with different pika URI
     config_dir = tmp_path / "env_both_test"
     config_dir.mkdir()
     config_file = config_dir / "pyproject.toml"
@@ -468,8 +459,7 @@ def test_queueio_with_both_environment_variables(tmp_path, monkeypatch):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "amqp://config:5672"
-        journal = "amqp://config:5672"
+        pika = "amqp://config:5672"
         """
     config_file.write_text(config_content)
 
@@ -481,9 +471,8 @@ def test_queueio_with_both_environment_variables(tmp_path, monkeypatch):
     original_registry = dict(ROUTINE_REGISTRY)
     ROUTINE_REGISTRY.clear()
 
-    # Set both environment variables to use localhost (which works)
-    monkeypatch.setenv("QUEUEIO_BROKER", "amqp://localhost:5672")
-    monkeypatch.setenv("QUEUEIO_JOURNAL", "amqp://localhost:5672")
+    # Set environment variable to use localhost (which works)
+    monkeypatch.setenv("QUEUEIO_PIKA", "amqp://localhost:5672")
 
     try:
         queueio = QueueIO()
@@ -499,31 +488,10 @@ def test_queueio_with_both_environment_variables(tmp_path, monkeypatch):
         ROUTINE_REGISTRY.update(original_registry)
 
 
-def test_queueio_with_invalid_environment_broker(monkeypatch):
-    """QueueIO fails with invalid QUEUEIO_BROKER environment variable."""
+def test_queueio_with_invalid_environment_pika(monkeypatch):
+    """QueueIO fails with invalid QUEUEIO_PIKA environment variable."""
     # Set invalid environment variable
-    monkeypatch.setenv("QUEUEIO_BROKER", "redis://invalid:6379")
-
-    # Clear registry to isolate test
-    original_registry = dict(ROUTINE_REGISTRY)
-    ROUTINE_REGISTRY.clear()
-
-    try:
-        # Should raise ValueError for invalid URI scheme
-        with pytest.raises(
-            ValueError, match="URI scheme must be 'amqp:', got: redis://invalid:6379"
-        ):
-            QueueIO()
-    finally:
-        # Restore registry
-        ROUTINE_REGISTRY.clear()
-        ROUTINE_REGISTRY.update(original_registry)
-
-
-def test_queueio_with_invalid_environment_journal(monkeypatch):
-    """QueueIO fails with invalid QUEUEIO_JOURNAL environment variable."""
-    # Set invalid environment variable
-    monkeypatch.setenv("QUEUEIO_JOURNAL", "redis://invalid:6379")
+    monkeypatch.setenv("QUEUEIO_PIKA", "redis://invalid:6379")
 
     # Clear registry to isolate test
     original_registry = dict(ROUTINE_REGISTRY)
@@ -554,8 +522,7 @@ def test_queueio_with_invalid_journal_uri_scheme(tmp_path):
         version = "0.1.0"
 
         [tool.queueio]
-        broker = "amqp://localhost:5672"
-        journal = "redis://localhost:6379"
+        pika = "redis://localhost:6379"
         """
     config_file.write_text(config_content)
 

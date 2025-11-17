@@ -56,18 +56,16 @@ Add the configuration to your `pyproject.toml`:
 ```toml
 [tool.queueio]
 # Configure RabbitMQ
-broker = "amqp://guest:guest@localhost:5672/"
-journal = "amqp://guest:guest@localhost:5672/"
+pika = "amqp://guest:guest@localhost:5672/"
 # Register the modules that the worker should load to find your routines
 register = ["basic"]
 ```
 
-The broker and journal can be configured with environment variables
+The pika configuration can be overridden with an environment variable
 to allow a project to be deployed in multiple environments.
 
 ```sh
-QUEUEIO_BROKER='amqp://guest:guest@localhost:5672/'
-QUEUEIO_JOURNAL='amqp://guest:guest@localhost:5672/'
+QUEUEIO_PIKA='amqp://guest:guest@localhost:5672/'
 ```
 
 Run your script to submit the routine to run on a worker:

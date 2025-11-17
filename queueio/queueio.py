@@ -50,40 +50,34 @@ class QueueIO:
         return {}
 
     def __default_broker(self) -> Broker:
-        broker_uri = os.environ.get("QUEUEIO_BROKER")
-        if not broker_uri:
-            config = self.__config()
-            broker_uri = config.get("broker")
-            if not broker_uri:
-                raise ValueError(
-                    "No broker URI configured. Set QUEUEIO_BROKER env var "
-                    "or add 'broker' to [tool.queueio] in pyproject.toml"
-                )
-
-        if not broker_uri.startswith("amqp:"):
-            raise ValueError(f"URI scheme must be 'amqp:', got: {broker_uri}")
+        pika_uri = self.__get_pika_uri()
 
         from .pika.broker import PikaBroker
 
-        return PikaBroker.from_uri(broker_uri)
+        return PikaBroker.from_uri(pika_uri)
 
     def __default_journal(self) -> Journal:
-        journal_uri = os.environ.get("QUEUEIO_JOURNAL")
-        if not journal_uri:
-            config = self.__config()
-            journal_uri = config.get("journal")
-            if not journal_uri:
-                raise ValueError(
-                    "No journal URI configured. Set QUEUEIO_JOURNAL env var "
-                    "or add 'journal' to [tool.queueio] in pyproject.toml"
-                )
-
-        if not journal_uri.startswith("amqp:"):
-            raise ValueError(f"URI scheme must be 'amqp:', got: {journal_uri}")
+        pika_uri = self.__get_pika_uri()
 
         from .pika.journal import PikaJournal
 
-        return PikaJournal.from_uri(journal_uri)
+        return PikaJournal.from_uri(pika_uri)
+
+    def __get_pika_uri(self) -> str:
+        pika_uri = os.environ.get("QUEUEIO_PIKA")
+        if not pika_uri:
+            config = self.__config()
+            pika_uri = config.get("pika")
+            if not pika_uri:
+                raise ValueError(
+                    "No pika URI configured. Set QUEUEIO_PIKA env var "
+                    "or add 'pika' to [tool.queueio] in pyproject.toml"
+                )
+
+        if not pika_uri.startswith("amqp:"):
+            raise ValueError(f"URI scheme must be 'amqp:', got: {pika_uri}")
+
+        return pika_uri
 
     def __register_routines(self):
         """Load routine modules from pyproject.toml."""
