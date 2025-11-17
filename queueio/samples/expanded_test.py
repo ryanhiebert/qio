@@ -3,8 +3,8 @@ import sys
 
 import pytest
 
-from queueio import QueueIO
 from queueio.invocation import Invocation
+from queueio.queueio import QueueIO
 
 from .expanded import irregular
 
@@ -14,7 +14,7 @@ def test_integration():
     # Prefers a clean environment and queue
     queueio = QueueIO()
 
-    try:
+    with queueio.activate():
         queueio.purge(queue="queueio")
         events = queueio.subscribe({Invocation.Completed})
         invocation = irregular()
@@ -39,7 +39,3 @@ def test_integration():
                     # Force kill if it doesn't terminate gracefully
                     proc.kill()
                     proc.wait()
-
-    finally:
-        # Always clean up the queueio instance
-        queueio.shutdown()

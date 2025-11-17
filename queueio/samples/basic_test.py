@@ -3,8 +3,8 @@ import sys
 
 import pytest
 
-from queueio import QueueIO
 from queueio.invocation import Invocation
+from queueio.queueio import QueueIO
 
 from .basic import yielding
 
@@ -13,7 +13,7 @@ from .basic import yielding
 def test_integration():
     queueio = QueueIO()
 
-    try:
+    with queueio.activate():
         queueio.purge(queue="queueio")
         events = queueio.subscribe({Invocation.Completed})
         invocation = yielding(7)
@@ -36,6 +36,3 @@ def test_integration():
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait()
-
-    finally:
-        queueio.shutdown()

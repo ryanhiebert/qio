@@ -1,7 +1,7 @@
 from contextlib import suppress
 from time import sleep as time_sleep
 
-from queueio import QueueIO
+from queueio import activate
 from queueio import routine
 from queueio.gather import gather
 from queueio.sleep import sleep
@@ -47,8 +47,5 @@ async def irregular():
 
 
 if __name__ == "__main__":
-    q = QueueIO()
-    try:
-        q.submit(irregular())
-    finally:
-        q.shutdown()
+    with activate():
+        irregular().start()

@@ -2,7 +2,7 @@
 
 from time import sleep as time_sleep
 
-from queueio import QueueIO
+from queueio import activate
 from queueio import routine
 from queueio.gather import gather
 from queueio.sleep import sleep
@@ -24,8 +24,5 @@ async def yielding(iterations: int):
 
 
 if __name__ == "__main__":
-    q = QueueIO()
-    try:
-        q.submit(yielding(7))
-    finally:
-        q.shutdown()
+    with activate():
+        yielding(7).start()

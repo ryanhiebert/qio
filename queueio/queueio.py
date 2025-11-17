@@ -5,7 +5,9 @@ from collections.abc import Generator
 from collections.abc import Iterable
 from concurrent.futures import Future
 from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
+from typing import Self
 
 from .broker import Broker
 from .consumer import Consumer
@@ -24,6 +26,15 @@ from .thread import Thread
 
 
 class QueueIO:
+    __active = ContextVar[Self | None]("active", default=None)
+
+    @classmethod
+    def active(cls) -> Self:
+        """Find the currently active instance."""
+        queueio = cls.__active.get()
+        assert queueio is not None, "No active QueueIO instance"
+        return queueio
+
     def __init__(
         self,
         *,
@@ -34,6 +45,16 @@ class QueueIO:
         self.__stream = Stream(journal or self.__default_journal())
         self.__invocations = dict[Invocation, Message]()
         self.__register_routines()
+
+    @contextmanager
+    def activate(self):
+        token = self.__active.set(self)
+        try:
+            with self.invocation_handler():
+                yield
+        finally:
+            self.__active.reset(token)
+            self.shutdown()
 
     def __pyproject(self) -> Path | None:
         for path in [cwd := Path.cwd(), *cwd.parents]:
