@@ -1,17 +1,17 @@
 from contextlib import suppress
-from time import sleep as time_sleep
+from time import sleep
 
 from queueio import activate
 from queueio import routine
 from queueio.gather import gather
-from queueio.sleep import sleep
+from queueio.pause import pause
 
 
 @routine(name="regular", queue="queueio")
 def regular(instance: int, iterations: int):
     for i in range(iterations):
         print(f"Iteration {instance} {i} started")
-        time_sleep(0.1)
+        sleep(0.1)
     print(f"Instance {instance} completed")
     return f"Instance {instance} completed"
 
@@ -38,11 +38,11 @@ async def abstract(instance: int, iterations: int):
 async def irregular():
     await regular(1, 2)
     print("irregular sleep started")
-    time_sleep(0.1)
-    print("irregular sleep ended. Starting queueio sleep.")
-    await sleep(0.4)
-    print("queueio sleep ended")
-    await gather(regular(7, 2), sleep(0.5), abstract(8, 1))
+    sleep(0.1)
+    print("irregular sleep ended. Starting queueio pause.")
+    await pause(0.4)
+    print("queueio pause ended")
+    await gather(regular(7, 2), pause(0.5), abstract(8, 1))
     return await abstract(2, 5)
 
 

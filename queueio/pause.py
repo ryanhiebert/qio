@@ -6,7 +6,7 @@ from .suspension import Suspension
 
 
 @dataclass(eq=False, kw_only=True)
-class Sleep(Suspension[None]):
+class Pause(Suspension[None]):
     interval: float
 
     def start(self):
@@ -17,5 +17,5 @@ class Sleep(Suspension[None]):
         return future
 
 
-def sleep(interval: float, /) -> Sleep:
-    return Sleep(interval=interval)
+def pause(interval: float, /) -> Pause:
+    return Pause(interval=interval)

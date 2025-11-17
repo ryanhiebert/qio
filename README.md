@@ -19,17 +19,17 @@ Create your routines:
 
 ```python
 # basic.py
-from time import sleep as time_sleep
+from time import sleep
 
 from queueio import activate
 from queueio import routine
 from queueio.gather import gather
-from queueio.sleep import sleep
+from queueio.pause import pause
 
 
 @routine(name="blocking", queue="queueio")
 def blocking():
-    time_sleep(0.1)  # Regular blocking call
+    sleep(0.1)  # Regular blocking call
 
 
 @routine(name="yielding", queue="queueio")
@@ -37,7 +37,7 @@ async def yielding(iterations: int):
     # Do them two at a time
     for _ in range(iterations // 2):
         await gather(blocking(), blocking())
-        await sleep(0.2)  # Release processing capacity
+        await pause(0.2)  # Release processing capacity
     if iterations % 2 == 1:
         await blocking()
 
