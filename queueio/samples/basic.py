@@ -2,7 +2,6 @@
 
 from time import sleep
 
-from queueio import activate
 from queueio import routine
 from queueio.gather import gather
 from queueio.pause import pause
@@ -21,8 +20,3 @@ async def yielding(iterations: int):
         await pause(0.2)  # Release processing capacity
     if iterations % 2 == 1:
         await blocking()
-
-
-if __name__ == "__main__":
-    with activate():
-        yielding(7).submit()

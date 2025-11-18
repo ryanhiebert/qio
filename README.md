@@ -21,7 +21,6 @@ Create your routines:
 # basic.py
 from time import sleep
 
-from queueio import activate
 from queueio import routine
 from queueio.gather import gather
 from queueio.pause import pause
@@ -40,12 +39,6 @@ async def yielding(iterations: int):
         await pause(0.2)  # Release processing capacity
     if iterations % 2 == 1:
         await blocking()
-
-
-if __name__ == "__main__":
-    with activate():
-        yielding(7).submit()
-
 ```
 
 Add the configuration to your `pyproject.toml`:
@@ -65,10 +58,14 @@ to allow a project to be deployed in multiple environments.
 QUEUEIO_PIKA='amqp://guest:guest@localhost:5672/'
 ```
 
-Run your script to submit the routine to run on a worker:
+Submit the routine to run on a worker:
 
-```sh
-python basic.py
+```python
+from queueio import activate
+from basic import yielding
+
+with activate():
+    yielding(7).submit()
 ```
 
 Then run the worker to process submitted routines:

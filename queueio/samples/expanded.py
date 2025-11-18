@@ -1,7 +1,6 @@
 from contextlib import suppress
 from time import sleep
 
-from queueio import activate
 from queueio import routine
 from queueio.gather import gather
 from queueio.pause import pause
@@ -44,8 +43,3 @@ async def irregular():
     print("queueio pause ended")
     await gather(regular(7, 2), pause(0.5), abstract(8, 1))
     return await abstract(2, 5)
-
-
-if __name__ == "__main__":
-    with activate():
-        irregular().submit()
