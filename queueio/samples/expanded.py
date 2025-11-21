@@ -41,5 +41,5 @@ async def irregular():
     print("irregular sleep ended. Starting queueio pause.")
     await pause(0.4)
     print("queueio pause ended")
-    await gather(regular(7, 2), pause(0.5), abstract(8, 1))
+    await gather(regular(7, 2), pause(0.5))
     return await abstract(2, 5)

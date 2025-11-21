@@ -2,9 +2,9 @@
 
 from time import sleep
 
+from queueio import gather
+from queueio import pause
 from queueio import routine
-from queueio.gather import gather
-from queueio.pause import pause
 
 
 @routine(name="blocking", queue="queueio")

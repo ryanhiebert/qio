@@ -1,23 +1,19 @@
-from collections.abc import Awaitable
 from collections.abc import Iterable
 from concurrent.futures import Future
 from typing import Any
 from typing import overload
 
-from .suspend import suspend
 from .suspension import Suspension
 
 
 class Gather[T](Suspension[T]):
-    def __init__(self, awaitables: Iterable[Awaitable[Any]]):
+    def __init__(self, suspensions: Iterable[Suspension[Any]]):
         super().__init__()
-        self.__awaitables = awaitables
+        self.__suspensions = suspensions
 
     def submit(self) -> Future[T]:
         gathered = Future()
-        futures = [
-            suspension.submit() for suspension in map(suspend, self.__awaitables)
-        ]
+        futures = [suspension.submit() for suspension in self.__suspensions]
 
         # concurrent.futures.Future doesn't give us a way to be notified
         # when a future is running, so we can't reasonably determine when
@@ -56,26 +52,26 @@ class Gather[T](Suspension[T]):
         return gathered
 
 
-A = Awaitable
+S = Suspension
 
 
 @overload
-def gather[T1](a: A[T1], /) -> Gather[tuple[T1]]: ...
+def gather[T1](s: S[T1], /) -> Gather[tuple[T1]]: ...
 @overload
-def gather[T1, T2](a1: A[T1], a2: A[T2], /) -> Gather[tuple[T1, T2]]: ...
+def gather[T1, T2](s1: S[T1], s2: S[T2], /) -> Gather[tuple[T1, T2]]: ...
 @overload
 def gather[T1, T2, T3](
-    a1: A[T1], a2: A[T2], a3: A[T3], /
+    s1: S[T1], s2: S[T2], s3: S[T3], /
 ) -> Gather[tuple[T1, T2, T3]]: ...
 @overload
 def gather[T1, T2, T3, T4](
-    a1: A[T1], a2: A[T2], a3: A[T3], a4: A[T4], /
+    s1: S[T1], s2: S[T2], s3: S[T3], s4: S[T4], /
 ) -> Gather[tuple[T1, T2, T3, T4]]: ...
 @overload
 def gather[T1, T2, T3, T4, T5](
-    a1: A[T1], a2: A[T2], a3: A[T3], a4: A[T4], a5: A[T5], /
+    s1: S[T1], s2: S[T2], s3: S[T3], s4: S[T4], s5: S[T5], /
 ) -> Gather[tuple[T1, T2, T3, T4, T5]]: ...
 
 
-def gather(*awaitables: Awaitable[Any]) -> Gather[Any]:
-    return Gather(awaitables)
+def gather(*suspensions: Suspension[Any]) -> Gather[Any]:
+    return Gather(suspensions)

@@ -21,9 +21,9 @@ Create your routines:
 # basic.py
 from time import sleep
 
+from queueio import gather
+from queueio import pause
 from queueio import routine
-from queueio.gather import gather
-from queueio.pause import pause
 
 
 @routine(name="blocking", queue="queueio")
@@ -77,7 +77,7 @@ with activate():
 Then run the worker to process submitted routines:
 
 ```sh
-queueio run queueio=3
+queueio run queueio=4
 ```
 
 Monitor the status of active routine invocations:
@@ -89,8 +89,8 @@ queueio monitor
 Stability
 ---------
 
-This is a new project.
-The design of the public API is under active development and will change.
-Release notes will provide clear upgrade instructions,
+The design of the public API is under active development
+and is likely to change with any release.
+Release notes will provide upgrade instructions,
 but backward compatibility and deprecation warnings
 will not generally be implemented.
