@@ -58,6 +58,12 @@ to allow a project to be deployed in multiple environments.
 QUEUEIO_PIKA='amqp://guest:guest@localhost:5672/'
 ```
 
+Sync the queues to the broker:
+
+```python
+queueio sync
+```
+
 Submit the routine to run on a worker:
 
 ```python
@@ -71,7 +77,7 @@ with activate():
 Then run the worker to process submitted routines:
 
 ```sh
-queueio worker queueio=3
+queueio run queueio=3
 ```
 
 Monitor the status of active routine invocations:

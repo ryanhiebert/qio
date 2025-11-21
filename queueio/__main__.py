@@ -10,9 +10,25 @@ from .worker import Worker
 
 app = Typer()
 
+routine_app = Typer()
+queue_app = Typer()
 
-@app.command()
-def routines():
+app.add_typer(
+    routine_app,
+    name="routine",
+    help="A function to coordinate background execution.",
+    rich_help_panel="Entities",
+)
+app.add_typer(
+    queue_app,
+    name="queue",
+    help="An ordered collection of work items to process.",
+    rich_help_panel="Entities",
+)
+
+
+@routine_app.command("list")
+def routine_list():
     """Show all registered routines."""
     queueio = QueueIO()
     try:
@@ -39,11 +55,11 @@ def routines():
         queueio.shutdown()
 
 
-@app.command()
+@app.command(rich_help_panel="Commands")
 def monitor(raw: bool = False):
     """Monitor queueio events.
 
-    Shows a live view of queueio activity. Use --raw for detailed event output.
+    Show a live view of queueio activity. Use --raw for detailed event output.
     """
     if raw:
         queueio = QueueIO()
@@ -59,8 +75,8 @@ def monitor(raw: bool = False):
         Monitor().run()
 
 
-@app.command()
-def worker(
+@app.command(rich_help_panel="Commands")
+def run(
     queuespec: Annotated[
         QueueSpec,
         Argument(
@@ -71,7 +87,7 @@ def worker(
         ),
     ],
 ):
-    """Start a worker to process from a queue.
+    """Run a worker to process from a queue.
 
     The worker will process invocations from the specified queue,
     as many at a time as specified by the concurrency.
@@ -80,8 +96,31 @@ def worker(
     Worker(queueio, queuespec)()
 
 
-@app.command()
-def purge(
+@app.command(rich_help_panel="Commands")
+def sync():
+    """Sync known queues to the broker."""
+    queueio = QueueIO()
+    try:
+        routines = queueio.routines()
+
+        if not routines:
+            print("No routines registered.")
+            return
+
+        queues = sorted({routine.queue for routine in routines})
+
+        print(f"Syncing queues for {len(routines)} routine(s):")
+        for queue in queues:
+            print(f"  Ensuring queue exists: {queue}")
+            queueio.create(queue=queue)
+
+        print(f"Successfully synced {len(queues)} queue(s)")
+    finally:
+        queueio.shutdown()
+
+
+@queue_app.command("purge")
+def queue_purge(
     queues: Annotated[
         str,
         Argument(

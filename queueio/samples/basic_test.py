@@ -14,13 +14,14 @@ def test_integration():
     queueio = QueueIO()
 
     with queueio.activate():
+        queueio.create(queue="queueio")
         queueio.purge(queue="queueio")
         events = queueio.subscribe({Invocation.Completed})
         invocation = yielding(7)
         queueio.submit(invocation)
 
         proc = subprocess.Popen(
-            [sys.executable, "-m", "queueio", "worker", "queueio=1"],
+            [sys.executable, "-m", "queueio", "run", "queueio=1"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )

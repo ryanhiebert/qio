@@ -27,11 +27,7 @@ class PikaReceiver(Receiver):
         self.__prefetch = 0
         self.__adjust_prefetch(+queuespec.concurrency)
 
-        declared_queues = set()
         for queue in queuespec.queues:
-            if queue not in declared_queues:
-                self.__channel.declare_queue(queue=queue, durable=True)
-                declared_queues.add(queue)
             result = self.__channel.consume(queue)
             self.__consumer_tag[queue] = cast(str, result.method.consumer_tag)
 

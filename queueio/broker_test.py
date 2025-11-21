@@ -60,6 +60,7 @@ class BaseBrokerTest:
     @pytest.mark.timeout(2)
     def test_prefetch_limits_message_consumption(self, broker):
         """Verify that prefetch parameter limits message consumption."""
+        broker.create(queue="test-queue")
         broker.purge(queue="test-queue")
 
         # Enqueue more messages than prefetch limit
@@ -92,6 +93,7 @@ class BaseBrokerTest:
     @pytest.mark.timeout(2)
     def test_suspend_resume_affects_prefetch_capacity(self, broker):
         """Verify suspending messages frees capacity and resuming reduces it."""
+        broker.create(queue="test-queue")
         broker.purge(queue="test-queue")
 
         # Enqueue messages
@@ -129,6 +131,7 @@ class BaseBrokerTest:
     @pytest.mark.timeout(2)
     def test_complete_message_frees_prefetch_capacity(self, broker):
         """Verify completing messages frees up capacity."""
+        broker.create(queue="test-queue")
         broker.purge(queue="test-queue")
 
         # Enqueue more messages than prefetch limit
@@ -168,6 +171,7 @@ class BaseBrokerTest:
     @pytest.mark.timeout(2)
     def test_multiple_receivers_independent_prefetch_limits(self, broker):
         """Verify multiple receivers operate with independent prefetch limits."""
+        broker.create(queue="test-queue")
         broker.purge(queue="test-queue")
 
         # Enqueue enough messages for both receivers
@@ -219,6 +223,8 @@ class BaseBrokerTest:
     @skip_if_unsupported("supports_multiple_queues")
     def test_receive_supports_multiple_queues(self, broker):
         """Verify broker can receive from multiple queues."""
+        broker.create(queue="queue1")
+        broker.create(queue="queue2")
         broker.purge(queue="queue1")
         broker.purge(queue="queue2")
 
@@ -254,6 +260,10 @@ class BaseBrokerTest:
     def test_multiple_queues_with_mixed_empty_and_filled(self, broker):
         """Verify broker handles multiple queues with some empty, some with messages."""
 
+        broker.create(queue="empty1")
+        broker.create(queue="filled")
+        broker.create(queue="empty2")
+        broker.create(queue="also_filled")
         broker.purge(queue="empty1")
         broker.purge(queue="filled")
         broker.purge(queue="empty2")
@@ -298,6 +308,8 @@ class BaseBrokerTest:
         probability in the round-robin selection.
         """
 
+        broker.create(queue="priority_queue")
+        broker.create(queue="normal_queue")
         broker.purge(queue="priority_queue")
         broker.purge(queue="normal_queue")
 
@@ -398,6 +410,9 @@ class BaseBrokerTest:
         the message, not just cycle by a fixed amount.
         """
 
+        broker.create(queue="empty")
+        broker.create(queue="queue1")
+        broker.create(queue="queue2")
         broker.purge(queue="empty")
         broker.purge(queue="queue1")
         broker.purge(queue="queue2")

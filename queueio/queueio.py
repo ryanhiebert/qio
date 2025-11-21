@@ -112,6 +112,9 @@ class QueueIO:
         with self.invocation_handler():
             return invocation.submit().result()
 
+    def create(self, *, queue: str):
+        self.__broker.create(queue=queue)
+
     def purge(self, *, queue: str):
         self.__broker.purge(queue=queue)
 
