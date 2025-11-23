@@ -8,6 +8,13 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com).
 [0.2.0] - 2025-11-22
 --------------------
 
+### Fixed
+
+- Include the queueio logo in the distribution so it will show on PyPI.
+
+[0.2.0] - 2025-11-22
+--------------------
+
 ### Acknowledgement
 
 Thank you to Nick Anderegg for allowing me to use the queueio name for this project.
@@ -29,4 +36,5 @@ Thank you to Nick Anderegg for allowing me to use the queueio name for this proj
 - The queuespec syntax to `queue run` to consume multiple queues with shared capacity.
 - `queueio monitor` command to monitor activity in the queueio system.
 
-[0.2.0]: https://github.com/ryanhiebert/queueio/releases/tag/0.2
+[0.2.1]: https://github.com/ryanhiebert/queueio/compare/tag/0.2.1...tag/0.2.1
+[0.2.0]: https://github.com/ryanhiebert/queueio/releases/tag/0.2.0
