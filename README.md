@@ -1,4 +1,5 @@
-![queueio](logo.svg)
+![queueio](https://raw.githubusercontent.com/ryanhiebert/queueio/main/logo.svg)
+
 
 Python background queues with an async twist
 ============================================

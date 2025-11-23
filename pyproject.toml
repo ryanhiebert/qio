@@ -1,6 +1,6 @@
 [project]
 name = "queueio"
-version = "0.2.1"
+version = "0.2.2"
 description = "Python background queues with an async twist"
 readme = "README.md"
 license = "MIT"
