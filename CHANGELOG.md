@@ -10,7 +10,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com).
 
 ### Fixed
 
-- Use the queueio logo from PyPI so it will show on PyPI.
+- Use the queueio logo from GitHub so it will show on PyPI.
 
 [0.2.1] - 2025-11-22
 --------------------
